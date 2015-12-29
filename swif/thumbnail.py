@@ -52,14 +52,15 @@ class ThumbnailRender(object):
         dwmapi.DwmUnregisterThumbnail(self.thumbnail)
         print 'unregister', win32gui.GetWindowText(self.src)
 
-    def render(self):
+    def render(self, rc=None):
         thumbprop = ThumbProp()
         thumbprop.dwFlags = (
             DWM_TNP_RECTDESTINATION |
             DWM_TNP_VISIBLE |
             DWM_TNP_SOURCECLIENTAREAONLY
         )
-        rc = self.dst.rect()
+        if rc is None:
+            rc = self.dst.rect()
         thumbprop.rcDestination.left = rc.left()
         thumbprop.rcDestination.top = rc.top()
         thumbprop.rcDestination.right = rc.right()
