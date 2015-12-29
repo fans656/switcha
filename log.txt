@@ -23,3 +23,7 @@ http://www.qtcentre.org/threads/22197-Bring-application-window-to-front
 http://www.codeproject.com/Tips/76427/How-to-bring-window-to-top-with-SetForegroundWindo
 第二种方法试了不好用，第一种模拟MENU键的办法works like a charm~~
 不过要小心一定别漏了KEYUP，否则整个电脑键盘操作全要乱套
+
+2015-12-29 23:45:35
+目前还是有bug，经常会残留 LMENU down 的状态导致应用程序从此输入紊乱
+需要再仔细研究下 keybd_event 或者找个更好的绕过 SetForegroundWindow 限制的机制
