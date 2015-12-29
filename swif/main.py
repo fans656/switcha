@@ -6,6 +6,7 @@ import win32gui
 import win32api
 import win32process
 import ctypes
+from thumbnail import ThumbnailRender
 
 class Widget(QDialog):
 
@@ -17,8 +18,14 @@ class Widget(QDialog):
         self.hm.HookKeyboard()
 
         self.wndlist = QListWidget()
+        self.thumbnail = QWidget()
+        self.thumbnail.setMinimumSize(QSize(700, 320))
+
+        self.thumbnail_timer = QTimer()
+        self.thumbnail_timer.timeout.connect(self.refresh)
 
         lt = QHBoxLayout()
+        lt.addWidget(self.thumbnail)
         lt.addWidget(self.wndlist)
         self.setLayout(lt)
 
@@ -42,17 +49,20 @@ class Widget(QDialog):
         if ev.KeyID == win32con.VK_LMENU and ev.Message == win32con.WM_KEYUP:
             self.deactivate()
             # if return False here, the ALT key state is messed (but why?)
+        if ev.Key.isdigit():
+            self.select(int(ev.Key) - 1)
+            self.deactivate()
         return True
 
     def on_alt_tab_down(self):
         row = self.wndlist.currentRow()
         row = (row + 1) % len(self.windows)
-        self.wndlist.setCurrentRow(row)
+        self.select(row)
 
     def on_alt_shift_tab_down(self):
         row = self.wndlist.currentRow()
         row = (row + len(self.windows) - 1) % len(self.windows)
-        self.wndlist.setCurrentRow(row)
+        self.select(row)
 
     def on_alt_tab_up(self):
         self.hide()
@@ -62,14 +72,29 @@ class Widget(QDialog):
         win32gui.EnumWindows(self.filter_window, None)
         self.windows.pop() # remove Desktop window
         self.wndlist.clear()
-        for hwnd, title in self.windows:
-            self.wndlist.addItem(title)
-        self.wndlist.setCurrentRow(0)
+        for i, (hwnd, title) in enumerate(self.windows):
+            title = title.decode('gbk')
+            text = '{} {}'.format(i + 1, title[:30])
+            self.wndlist.addItem(text)
+        self.select(0)
         self.show()
-        QApplication.setActiveWindow(self)
+        self.thumbnail_timer.start(200)
+
+    def select(self, index):
+        self.wndlist.setCurrentRow(index)
+        self.thumbnail_render = ThumbnailRender(
+            # TODO: can't use non-toplevel window?
+            dst=self,
+            src=self.windows[index][0],
+        )
+        self.thumbnail_render.render()
+
+    def refresh(self):
+        self.thumbnail_render.render()
 
     def deactivate(self):
         if self.isVisible():
+            self.thumbnail_timer.stop()
             self.hide()
             row = self.wndlist.currentRow()
             hwnd, title = self.windows[row]
