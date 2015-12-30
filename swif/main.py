@@ -16,6 +16,16 @@ COLOR_SELECTED = QColor('#616E75')
 COLOR_SHORTCUT = QColor('#C6D4DC')
 SHORTCUTS = 'ASDFQWER1234'
 
+def is_down(ev):
+    return ev.Message in (win32con.WM_KEYDOWN, win32con.WM_SYSKEYDOWN)
+
+def is_up(ev):
+    return ev.Message in (win32con.WM_KEYUP, win32con.WM_SYSKEYUP)
+
+def is_shift_down():
+    return any(pyHook.GetKeyState(k) for k in (
+            win32con.VK_LSHIFT, win32con.VK_RSHIFT))
+
 class Window(object):
 
     def __init__(self, hwnd, title, widget):
@@ -42,35 +52,31 @@ class Widget(QDialog):
 
         self.cur_index = 0
         self.sticky = False
-        self.simulating = False
         self.resize(QSize(1000, 600))
 
     def on_key(self, ev):
-        # alt tab down
         if ev.KeyID == win32con.VK_TAB:
             if ev.Alt:
-                if ev.Message == win32con.WM_SYSKEYDOWN:
+                # tab down with alt (i.e. alt-tab down)
+                if is_down(ev):
+                    # first tab down with alt, activate
                     if not self.isVisible():
                         self.activate()
-                    if pyHook.GetKeyState(win32con.VK_LSHIFT) or \
-                            pyHook.GetKeyState(win32con.VK_RSHIFT):
-                        self.on_alt_shift_tab_down()
+                    # subsequent tab down, roll between windows
+                    if is_shift_down():
+                        self.on_shift_tab_down()
                     else:
-                        self.on_alt_tab_down()
-                    return False
-                elif ev.Message == win32con.WM_KEYUP:
-                    self.on_alt_tab_up()
-                    return False
+                        self.on_tab_down()
+                return False
+        # don't do anything if not activated, except when activating of course
         if not self.isVisible():
             return True
-        # alt tab up
-        if ev.KeyID == win32con.VK_LMENU and ev.Message == win32con.WM_KEYUP \
-                and not self.simulating:
+        # alt up
+        if ev.KeyID == win32con.VK_LMENU and is_up(ev):
             if self.sticky:
                 self.sticky = False # sticky only once
             else:
                 self.deactivate(lmenu_up=True)
-            return False
         # switch by index
         elif ev.Key in SHORTCUTS:
             self.select(SHORTCUTS.index(ev.Key))
@@ -87,18 +93,15 @@ class Widget(QDialog):
             return False
         return True
 
-    def on_alt_tab_down(self):
+    def on_tab_down(self):
         row = self.cur_index
         row = (row + 1) % len(self.windows)
         self.select(row)
 
-    def on_alt_shift_tab_down(self):
+    def on_shift_tab_down(self):
         row = self.cur_index
         row = (row + len(self.windows) - 1) % len(self.windows)
         self.select(row)
-
-    def on_alt_tab_up(self):
-        self.hide()
 
     def activate(self):
         self.windows = []
@@ -138,7 +141,6 @@ class Widget(QDialog):
                 return
             hwnd = self.windows[self.cur_index].hwnd
             # simulate system key event so SetForegroundWindow can succeed
-            self.simulating = True
             # we need to keep the VK_LMENU up down state
             # so user needn't release alt to reactive the switcher
             # after a cancel
@@ -164,7 +166,6 @@ class Widget(QDialog):
                 win32api.keybd_event(
                     win32con.VK_LMENU, 0,
                     win32con.KEYEVENTF_EXTENDEDKEY, 0)
-            self.simulating = False
             if win32gui.IsIconic(hwnd):
                 cmd_show = win32con.SW_RESTORE
             else:
