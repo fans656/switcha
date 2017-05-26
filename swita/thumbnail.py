@@ -3,6 +3,8 @@ from PySide.QtGui import *
 import ctypes
 import win32gui
 
+__all__ = ['ThumbnailRender']
+
 DWM_TNP_RECTDESTINATION = 0x00000001
 DWM_TNP_RECTSOURCE = 0x00000002
 DWM_TNP_OPACITY = 0x00000004
@@ -20,6 +22,13 @@ class RECT(ctypes.Structure):
         ('bottom', ctypes.c_long),
     ]
 
+class SIZE(ctypes.Structure):
+
+    _fields_ = [
+        ('cx', ctypes.c_long),
+        ('cy', ctypes.c_long),
+    ]
+
 class ThumbProp(ctypes.Structure):
 
     _fields_ = [
@@ -31,28 +40,35 @@ class ThumbProp(ctypes.Structure):
         ('fSourceClientAreaOnly', ctypes.c_byte),
     ]
 
-def get_hwnd(widget):
-    pycobject_hwnd = widget.winId()
-    ctypes.pythonapi.PyCObject_AsVoidPtr.restype = ctypes.c_void_p
-    ctypes.pythonapi.PyCObject_AsVoidPtr.argtypes = [ctypes.py_object]
-    hwnd = ctypes.pythonapi.PyCObject_AsVoidPtr(pycobject_hwnd)
-    return hwnd
-
 class ThumbnailRender(object):
 
     def __init__(self, dst, src):
+        '''
+        dst - QWidget
+        src - hwnd
+
+        Establish a relationship between image source window and
+        destination window (as a drawing surface)
+        '''
         self.dst = dst
         self.src = src
         self.thumbnail = ctypes.c_long()
         dwmapi.DwmRegisterThumbnail(
-            get_hwnd(self.dst), self.src, ctypes.byref(self.thumbnail))
-        print 'register', win32gui.GetWindowText(self.src)
+            int(self.dst.winId()), self.src, ctypes.byref(self.thumbnail))
+        # query window size
+        sz = SIZE()
+        dwmapi.DwmQueryThumbnailSourceSize(self.thumbnail, ctypes.byref(sz))
+        self.width, self.height = sz.cx, sz.cy
 
     def __del__(self):
         dwmapi.DwmUnregisterThumbnail(self.thumbnail)
-        print 'unregister', win32gui.GetWindowText(self.src)
 
     def render(self, rc=None):
+        '''
+        Do the actual drawing
+
+        rc - QRect in destination's coordinate
+        '''
         thumbprop = ThumbProp()
         thumbprop.dwFlags = (
             DWM_TNP_RECTDESTINATION |
@@ -67,6 +83,6 @@ class ThumbnailRender(object):
         thumbprop.rcDestination.bottom = rc.bottom()
         thumbprop.fSourceClientAreaOnly = 0
         thumbprop.fVisible = 1
+        thumbprop.fSourceClientAreaOnly = 1
         dwmapi.DwmUpdateThumbnailProperties(
             self.thumbnail, ctypes.byref(thumbprop))
-        #print 'render', win32gui.GetWindowText(self.src)

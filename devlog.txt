@@ -1,0 +1,71 @@
+2015-12-29 11:19:09
+http://www.thescarms.com/VBasic/alttab.aspx
+跟着这里的教程来重现 alt-tab 里的窗口们
+
+2015-12-29 13:52:24
+alt down
+tab down
+    -> show switcher
+tab down
+tab down
+... (loop through windows)
+tab down
+tab up
+alt up
+    -> hide switcher
+
+2015-12-29 16:00:25
+http://www.qtcentre.org/threads/22197-Bring-application-window-to-front
+    widget.setWindowFlags(Qt.WindowStaysOnTopHint)
+可以保证 swif 出现时总在最上层
+
+2015-12-29 16:50:48
+http://www.codeproject.com/Tips/76427/How-to-bring-window-to-top-with-SetForegroundWindo
+第二种方法试了不好用，第一种模拟MENU键的办法works like a charm~~
+不过要小心一定别漏了KEYUP，否则整个电脑键盘操作全要乱套
+
+2015-12-29 23:45:35
+目前还是有bug，经常会残留 LMENU down 的状态导致应用程序从此输入紊乱
+需要再仔细研究下 keybd_event 或者找个更好的绕过 SetForegroundWindow 限制的机制
+
+2015-12-30 08:38:06
+修了修代码，貌似LMENU残留的问题又解决了——但是不知道why & how，所以还是去仔细研究研究
+
+2015-12-30 15:37:46
+看上去像是 LMENU down 被放进 system message queue 后，别的window都会取到，完了就给人mess up了
+(写了两个程序复现了一下，但是比较乱，，先试试看windows hook能不能搞明白)
+
+2015-12-30 21:49:50
+搞不定，好挫败~~ 先不弄了，需求也不强烈
+
+2017-05-25 18:40:31
+同一个进程如果有两个窗口(比如python带控制台的GUI)，SwitchToThisWindow会不太对，得研究一下
+
+2017-05-25 18:47:00
+目前要有的操作：
+
+tab down when alt downing
+    make switcher visible, switch to next thumbnail
+
+tab down when alt & shift downing
+    make switcher visible, switch to prev thumbnail
+
+alt up
+    when switcher visible: switch to current thumbnail, hide switcher
+
+key down when alt downing
+    switch to specified window, hide switcher
+    if no match then nop
+
+
+
+2017-05-26 09:15:21
+https://blogs.msdn.microsoft.com/oldnewthing/20111026-00/?p=9263
+监测hwnd关闭
+
+2017-05-26 17:09:45
+https://stackoverflow.com/questions/6312627/windows-7-how-to-bring-a-window-to-the-front-no-matter-what-other-window-has-fo
+
+2017-05-26 21:30:27
+https://blogs.msdn.microsoft.com/oldnewthing/20090226-00/?p=19013/
+折腾了一天，最终还是暂选 RegisterHotKey 的方式吧(ctrl-alt-1也确实是想用的方式)

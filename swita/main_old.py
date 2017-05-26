@@ -1,3 +1,5 @@
+from ctypes import windll
+
 from PySide.QtCore import *
 from PySide.QtGui import *
 import pyHook
@@ -6,6 +8,7 @@ import win32gui
 import win32api
 import win32process
 import ctypes
+
 from thumbnail import ThumbnailRender
 from f6 import each
 
@@ -26,6 +29,33 @@ def is_shift_down():
     return any(pyHook.GetKeyState(k) for k in (
             win32con.VK_LSHIFT, win32con.VK_RSHIFT))
 
+def bring_foreground(dst):
+    src = win32gui.GetForegroundWindow()
+    if not src:
+        print 'no foreground'
+        windll.user32.SwitchToThisWindow(dst)
+        return
+    if src == dst:
+        print 'same window'
+        return
+    src_pid, _ = win32process.GetWindowThreadProcessId(src)
+    cur_pid = win32api.GetCurrentThreadId()
+    if cur_pid == src_pid:
+        print 'same pid'
+        win32gui.SetForegroundWindow(dst)
+        windll.user32.SwitchToThisWindow(dst)
+    else:
+        win32process.AttachThreadInput(cur_pid, src_pid, True)
+        le = win32api.GetLastError()
+        if le:
+            print 'error', le
+            #print 'AttachThreadInput failed', win32api.GetLastError()
+            #return
+        windll.user32.SwitchToThisWindow(dst)
+        #win32gui.BringWindowToTop(dst)
+        #win32gui.ShowWindow(dst, win32con.SW_SHOW)
+        #win32process.AttachThreadInput(cur_pid, src_pid, False)
+
 class Window(object):
 
     def __init__(self, hwnd, title, widget):
@@ -34,6 +64,7 @@ class Window(object):
         self.thumbnail_render = ThumbnailRender(dst=widget, src=hwnd)
 
     def render(self):
+        print self, self.rc
         self.thumbnail_render.render(self.rc)
 
 class Widget(QDialog):
@@ -43,12 +74,13 @@ class Widget(QDialog):
 
         self.hm = pyHook.HookManager()
         self.hm.KeyAll = self.on_key
-        self.hm.HookKeyboard()
+        #self.hm.HookKeyboard()
 
         self.thumbnail_timer = QTimer()
         self.thumbnail_timer.timeout.connect(self.refresh)
 
-        self.setWindowFlags(Qt.SplashScreen | Qt.WindowStaysOnTopHint)
+        #self.setWindowFlags(Qt.SplashScreen | Qt.WindowStaysOnTopHint)
+        self.activate()
 
         self.cur_index = 0
         self.sticky = False
@@ -140,38 +172,7 @@ class Widget(QDialog):
             if not switch:
                 return
             hwnd = self.windows[self.cur_index].hwnd
-            # simulate system key event so SetForegroundWindow can succeed
-            # we need to keep the VK_LMENU up down state
-            # so user needn't release alt to reactive the switcher
-            # after a cancel
-            #
-            # during the process of WM_KEYUP event
-            # pyHook.GetKeyState(win32con.VK_LMENU) will report it's still down
-            # so we use lmenu_up variable here
-            if lmenu_up:
-                # down up
-                win32api.keybd_event(
-                    win32con.VK_LMENU, 0,
-                    win32con.KEYEVENTF_EXTENDEDKEY, 0)
-                win32api.keybd_event(
-                    win32con.VK_LMENU, 0,
-                    win32con.KEYEVENTF_EXTENDEDKEY | win32con.KEYEVENTF_KEYUP,
-                    0)
-            else:
-                # up down
-                win32api.keybd_event(
-                    win32con.VK_LMENU, 0,
-                    win32con.KEYEVENTF_EXTENDEDKEY | win32con.KEYEVENTF_KEYUP,
-                    0)
-                win32api.keybd_event(
-                    win32con.VK_LMENU, 0,
-                    win32con.KEYEVENTF_EXTENDEDKEY, 0)
-            if win32gui.IsIconic(hwnd):
-                cmd_show = win32con.SW_RESTORE
-            else:
-                cmd_show = win32con.SW_SHOW
-            win32gui.ShowWindow(hwnd, cmd_show)
-            win32gui.SetForegroundWindow(hwnd)
+            bring_foreground(hwnd)
 
     def filter_window(self, hwnd, _):
         if not win32gui.IsWindowVisible(hwnd):
@@ -237,3 +238,33 @@ font.setPointSize(18)
 app.setFont(font)
 w = Widget()
 app.exec_()
+
+def bring_foreground_(hwnd):
+    # simulate system key event so SetForegroundWindow can succeed
+    # we need to keep the VK_LMENU up down state
+    # so user needn't release alt to reactive the switcher
+    # after a cancel
+    #
+    # during the process of WM_KEYUP event
+    # pyHook.GetKeyState(win32con.VK_LMENU) will report it's still down
+    # so we use lmenu_up variable here
+    if lmenu_up:
+        # down up
+        win32api.keybd_event(win32con.VK_LMENU, 0, 0, 0)
+        win32api.keybd_event(win32con.VK_LMENU, 0,
+                             win32con.KEYEVENTF_KEYUP, 0)
+    else:
+        # up down
+        win32api.keybd_event(
+            win32con.VK_LMENU, 0,
+            win32con.KEYEVENTF_EXTENDEDKEY | win32con.KEYEVENTF_KEYUP,
+            0)
+        win32api.keybd_event(
+            win32con.VK_LMENU, 0,
+            win32con.KEYEVENTF_EXTENDEDKEY, 0)
+    if win32gui.IsIconic(hwnd):
+        cmd_show = win32con.SW_RESTORE
+    else:
+        cmd_show = win32con.SW_SHOW
+    win32gui.ShowWindow(hwnd, cmd_show)
+    win32gui.SetForegroundWindow(hwnd)
