@@ -7,7 +7,6 @@ import win32con
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
-from keyboard import Keyboard
 from window import Windows
 import config
 
