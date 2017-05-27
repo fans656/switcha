@@ -89,16 +89,18 @@ class Windows(object):
             idx = wnd2idx.get(wnd, None)
             if idx:
                 wnds[idx] = wnd
+                #print 'Found "{}", {}'.format(wnd.title, idx)
             else:
                 while wnds[i]:
                     i += 1
                 wnds[i] = wnd
+                #print 'New "{}", {}'.format(wnd.title, i)
                 i += 1
-        banner = '=' * 40
-        print banner, 'old windows:'
-        print_wnds(old_wnds)
-        print banner, 'new windows:'
-        print_wnds(wnds)
+        #banner = '=' * 40
+        #print banner, 'old windows:'
+        #print_wnds(old_wnds)
+        #print banner, 'new windows:'
+        #print_wnds(wnds)
         self.wnds = wnds
 
     @property
@@ -170,6 +172,10 @@ def is_alt_tab_window(hwnd, title):
     return True
 
 def print_wnds(wnds):
+    #print '*' * 40
+    #for wnd in wnds:
+    #    print wnd
+    #print '*' * 40
     for i, wnd in enumerate(wnds):
         idx = '{:2}'.format(i + 1)
         idx = '[{}]'.format(idx) if wnd.current else ' {} '.format(idx)

@@ -1,6 +1,6 @@
 import logging
 
-SIZE_RATIO = 0.5
+SIZE_RATIO = 1
 
 level = logging.DEBUG
 level = logging.INFO

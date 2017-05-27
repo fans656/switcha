@@ -1,4 +1,10 @@
 # coding: utf8
+'''
+
+Bugs:
+    ) run, win-e to open a new explorer, alt-0 to switch to last => Exception
+    ) run, open many explorer, ctrl-alt invoke panel, new windows don't show up
+'''
 from ctypes import windll
 import logging
 
@@ -7,6 +13,7 @@ import win32con
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
+from keyboard import Keyboard
 from window import Windows
 import config
 
@@ -32,55 +39,72 @@ class Widget(QDialog):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background:transparent;")
 
+        self.active = False
+        self.triggering = False
+
+        self.keyboard = Keyboard()
+        self.keyboard.on('ctrl alt', self.on_activate)
+        self.keyboard.on('alt ctrl', self.on_activate)
+        #self.keyboard.on('lalt', self.on_activate)
+        self.keyboard.on('ctrl alt^', self.on_deactivate)
+        self.keyboard.on('alt ctrl^', self.on_deactivate)
+        #self.keyboard.on('lalt^', self.on_deactivate)
+
         # hot key must be register after those setWindowFlags/setAttribute
         # guess Windows is identifying our window based on that
         self._hotkey_handlers = {}
+        self._hotkey_ids_when_active = []
 
         # switch/pin to 1-9
         for i in xrange(1, 10):
             key = str(i)
-            self.register_hotkey(key, self.switch_to_index, alt=True)
-            self.register_hotkey(key, self.on_pin_to_index,
+            self.register_hotkey(key, self.switch_to_index, args=(i - 1,),
+                                 alt=True)
+            self.register_hotkey(key, self.pin_to_index, args=(i - 1,),
                                  alt=True, shift=True)
 
         # switch/pin to last (0)
-        self.register_hotkey('0', self.switch_to_last, alt=True)
-        self.register_hotkey('0', self.pin_to_last, alt=True, shift=True)
+        self.register_hotkey('0', self.switch_to_last, args=(), alt=True)
+        self.register_hotkey('0', self.pin_to_last, args=(),
+                             alt=True, shift=True)
 
-        # switch/pin to prev (k)
-        self.register_hotkey('K', self.switch_to_prev, alt=True)
-        self.register_hotkey('K', self.pin_to_prev, alt=True, shift=True)
+        # switch/pin to prev
+        self.register_hotkey('D', self.switch_to_prev, args=(), alt=True)
+        self.register_hotkey('D', self.pin_to_prev, args=(),
+                             alt=True, shift=True)
 
-        # switch/pin to next (j)
-        self.register_hotkey('J', self.switch_to_next, alt=True)
-        self.register_hotkey('J', self.pin_to_next, alt=True, shift=True)
+        # switch/pin to next
+        self.register_hotkey('F', self.switch_to_next, args=(), alt=True)
+        self.register_hotkey('F', self.pin_to_next, args=(),
+                             alt=True, shift=True)
 
         self.wnds = Windows(self)
 
-    def switch_to_index(self, key):
-        logger.debug('switch to {}'.format(chr(key)))
+    def switch_to_index(self, idx):
+        logger.debug('switch to {} [1..)'.format(idx + 1))
         self.wnds.update()
-        idx = min(int(chr(key)) - 1, len(self.wnds) - 1)
+        idx = min(idx, len(self.wnds) - 1)
         self.wnds[idx].activate()
 
-    def switch_to_last(self, _):
+    def switch_to_index_and_hide(self, idx):
+        logger.debug('switch_to_index_and_hide', idx)
+        self.switch_to_index(idx)
+        self.deactivate()
+
+    def switch_to_last(self):
         logger.debug('switch to last')
         self.wnds.update()
         self.wnds[-1].activate()
 
-    def switch_to_prev(self, _):
+    def switch_to_prev(self):
         logger.debug('switch prev')
         self.wnds.update()
         self.wnds.prev.activate()
 
-    def switch_to_next(self, _):
+    def switch_to_next(self):
         logger.debug('switch next')
         self.wnds.update()
         self.wnds.next.activate()
-
-    def on_pin_to_index(self, key):
-        idx = int(chr(key)) - 1
-        self.pin_to_index(idx)
 
     def pin_to_index(self, idx):
         self.wnds.update()
@@ -93,22 +117,23 @@ class Widget(QDialog):
         self.wnds.update()
         return True
 
-    def pin_to_last(self, _):
+    def pin_to_last(self):
         logger.info('pin to last')
         self.pin_to_index(len(self.wnds) - 1)
 
-    def pin_to_prev(self, _):
+    def pin_to_prev(self):
         logger.info('pin to prev')
         wnds = self.wnds
         self.pin_to_index(wnds.index(wnds.prev))
 
-    def pin_to_next(self, _):
+    def pin_to_next(self):
         logger.info('pin to next')
         wnds = self.wnds
         self.pin_to_index(wnds.index(wnds.next))
 
-    def register_hotkey(self, ch, callback,
-                        ctrl=False, alt=False, shift=False):
+    def register_hotkey(self, ch, callback, args=None,
+                        ctrl=False, alt=False, shift=False,
+                        mod=0):
         """Register <modifiers>-<key> with callback
 
         At least one of Ctrl/Alt/Shift must be present,
@@ -122,37 +147,75 @@ class Widget(QDialog):
 
         key = ord(ch.upper())
         logger.info('register Ctrl-Alt-{} (0x{:02x})'.format(ch, key))
-        id = (len(self._hotkey_handlers) << 8) | key
-        self._hotkey_handlers[id] = callback
+        id = len(self._hotkey_handlers)
+        if args is None:
+            args = (ch,)
+        self._hotkey_handlers[id] = (callback, args)
         hwnd = self.winId()
-        modifiers = ctrl | alt | shift
+        modifiers = ctrl | alt | shift | mod
         win32gui.RegisterHotKey(
             hwnd, id, modifiers, key)
+        return id
 
-    def activate(self, show=True):
+    def on_activate(self, _):
+        if self.triggering:
+            return
+        self.triggering = True
+        self.activate()
+
+    def activate(self):
+        if self.active:
+            return
         logger.info('activate')
-        print_wnds(self.wnds)
-        show = False
-        if show:
-            rc_screen = QDesktopWidget().screenGeometry()
-            ratio = min(config.SIZE_RATIO, 1.0)
-            if ratio == 1.0:
-                self.showMaximized()
-            else:
-                width = rc_screen.width() * ratio
-                height = rc_screen.height() * ratio
-                self.resize(width, height); self.show()
+        self.active = True
+        self.wnds.update()
+
+        self._hotkey_ids_when_active = []
+        for i, ch in enumerate('UIOPJKL;M,./'):
+            try:
+                id = self.register_hotkey(ch, self.switch_to_index_and_hide,
+                                          args=(i,), ctrl=True, alt=True)
+                self._hotkey_ids_when_active.append(id)
+            except Exception:
+                logger.warning('register_hotkey "{}" failed'.format(ch))
+
+        rc_screen = QDesktopWidget().screenGeometry()
+        ratio = min(config.SIZE_RATIO, 1.0)
+        if ratio == 1.0:
+            self.showMaximized()
+        else:
+            width = rc_screen.width() * ratio
+            height = rc_screen.height() * ratio
+            self.resize(width, height)
+            self.show()
+
+    def on_deactivate(self, _):
+        if not self.triggering:
+            return
+        self.triggering = False
+        self.deactivate()
+        self.wnds.update()
 
     def deactivate(self):
+        if not self.active:
+            return
         logger.info('deactivate')
+        hwnd = self.winId()
+        #for id in self._hotkey_ids_when_active:
+        #    try:
+        #        win32gui.UnregisterHotKey(hwnd, id)
+        #    except Exception:
+        #        pass
+        #del self._hotkey_ids_when_active[:]
         self.hide()
+        self.active = False
 
     def winEvent(self, msg):
         if msg.message == win32con.WM_HOTKEY:
             id = msg.wParam
-            callback = self._hotkey_handlers.get(id)
+            callback, args = self._hotkey_handlers.get(id)
             if callback:
-                callback(id & 0xff)
+                callback(*args)
                 return True, 0
             else:
                 return False, 0
