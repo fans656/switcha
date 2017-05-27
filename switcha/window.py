@@ -5,12 +5,13 @@ from thumbnail import ThumbnailRender
 
 __all__ = ['enum_windows', 'Windodws']
 
-def enum_windows(pred=None, widget=None):
+def enum_windows(pred=None, widget=None, windows=None):
 
     def collect(hwnd, _):
         title = win32gui.GetWindowText(hwnd)
         if pred(hwnd, title):
-            wnds.append(Window(hwnd=hwnd, title=title, widget=widget))
+            wnds.append(Window(hwnd=hwnd, title=title, widget=widget,
+                               windows=windows))
 
     if pred is None:
         pred = is_alt_tab_window
@@ -29,10 +30,12 @@ class Window(object):
     def dummy(self):
         return Window(hwnd=None, title=None, widget=None)
 
-    def __init__(self, hwnd, title, widget=None):
+    def __init__(self, hwnd, title, widget=None, windows=None):
         self.hwnd = hwnd
         self.title = title
         self.widget = widget
+        self.windows = windows
+        self.pinned = False
 
         if widget:
             self.thumbnail = ThumbnailRender(dst=widget, src=hwnd)
@@ -46,17 +49,7 @@ class Window(object):
             r = win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
         else:
             r = win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-        #r = win32gui.BringWindowToTop(hwnd)
         r = win32gui.SetForegroundWindow(hwnd)
-        #r = win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0,0,0,0,
-        #                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
-        #print 'SetWindowPos HWND_NOTOPMOST', r
-        #r = win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST, 0,0,0,0,
-        #                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
-        #print 'SetWindowPos HWND_TOPMOST', r
-        #r = win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0,0,0,0,
-        #                      win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
-        #print 'SetWindowPos HWND_NOTOPMOST', r
 
     @property
     def current(self):
@@ -75,39 +68,10 @@ class Windows(object):
 
     def __init__(self, widget=None):
         self.widget = widget
-        self.wnds = []
-        self.update(widget)
+        self.wnds = enum_windows(widget=widget, windows=self)
 
-    def update(self, widget=None):
-        old_wnds = self.wnds
-        new_wnds = enum_windows(widget=widget or self.widget)
-
-        banner = '=' * 40
-        print banner, 'old'
-        print_wnds(old_wnds)
-        print banner, 'new'
-        print_wnds(new_wnds)
-
-        wnd2idx = {wnd: i for i, wnd in enumerate(old_wnds)}
-        wnds = [None] * len(new_wnds)
-        i = 0
-        for wnd in new_wnds:
-            idx = wnd2idx.get(wnd, None)
-            if idx:
-                wnds[idx] = wnd
-                #print 'Found "{}", {}'.format(wnd.title, idx)
-            else:
-                while wnds[i]:
-                    i += 1
-                wnds[i] = wnd
-                #print 'New "{}", {}'.format(wnd.title, i)
-                i += 1
-        #banner = '=' * 40
-        #print banner, 'old windows:'
-        #print_wnds(old_wnds)
-        print banner, 'wnds'
-        print_wnds(wnds)
-        self.wnds = wnds
+    def update(self):
+        wnds = enum_windows(self.widget)
 
     @property
     def current(self):
@@ -152,6 +116,18 @@ class Windows(object):
         except ValueError:
             return -1
 
+    def switch_to(self, idx, activate=True):
+        if not 0 <= idx < len(self):
+            return False
+        wnd = self.wnds[idx]
+        wnd.pinned = True
+        if activate:
+            wnd.activate()
+
+    def show(self):
+        print_wnds(self.wnds)
+        print
+
     def __iter__(self):
         return iter(self.wnds)
 
@@ -178,14 +154,23 @@ def is_alt_tab_window(hwnd, title):
     return True
 
 def print_wnds(wnds):
+    max_title_len = 40
     for i, wnd in enumerate(wnds):
-        idx = '{:2}'.format(i + 1)
         try:
-            idx = '[{}]'.format(idx) if wnd.current else ' {} '.format(idx)
-            title = repr(wnd.title)
+            idx = '{:2}'.format(i + 1)
+            if wnd.pinned:
+                idx = '[{}]'.format(idx)
+            else:
+                idx = ' {} '.format(idx)
+            idx = '*{}'.format(idx) if wnd.current else ' {}'.format(idx)
+            title = (wnd.title[:max_title_len]
+                     + ('...' if len(wnd.title) > max_title_len else ''))
             print '{} {:10} {}'.format(idx, wnd.hwnd, title)
         except Exception:
             print 'Unknown'
 
 if __name__ == '__main__':
     wnds = Windows()
+    wnds.switch_to(2 - 1)
+    wnds.switch_to(4 - 1)
+    wnds.show()
