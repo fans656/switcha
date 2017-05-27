@@ -82,6 +82,12 @@ class Windows(object):
         old_wnds = self.wnds
         new_wnds = enum_windows(widget=widget or self.widget)
 
+        banner = '=' * 40
+        print banner, 'old'
+        print_wnds(old_wnds)
+        print banner, 'new'
+        print_wnds(new_wnds)
+
         wnd2idx = {wnd: i for i, wnd in enumerate(old_wnds)}
         wnds = [None] * len(new_wnds)
         i = 0
@@ -99,8 +105,8 @@ class Windows(object):
         #banner = '=' * 40
         #print banner, 'old windows:'
         #print_wnds(old_wnds)
-        #print banner, 'new windows:'
-        #print_wnds(wnds)
+        print banner, 'wnds'
+        print_wnds(wnds)
         self.wnds = wnds
 
     @property
@@ -172,15 +178,14 @@ def is_alt_tab_window(hwnd, title):
     return True
 
 def print_wnds(wnds):
-    #print '*' * 40
-    #for wnd in wnds:
-    #    print wnd
-    #print '*' * 40
     for i, wnd in enumerate(wnds):
         idx = '{:2}'.format(i + 1)
-        idx = '[{}]'.format(idx) if wnd.current else ' {} '.format(idx)
-        title = repr(wnd.title)
-        print '{} {:10} {}'.format(idx, wnd.hwnd, title)
+        try:
+            idx = '[{}]'.format(idx) if wnd.current else ' {} '.format(idx)
+            title = repr(wnd.title)
+            print '{} {:10} {}'.format(idx, wnd.hwnd, title)
+        except Exception:
+            print 'Unknown'
 
 if __name__ == '__main__':
     wnds = Windows()

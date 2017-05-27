@@ -1,9 +1,42 @@
 # coding: utf8
 '''
-
 Bugs:
     ) run, win-e to open a new explorer, alt-0 to switch to last => Exception
     ) run, open many explorer, ctrl-alt invoke panel, new windows don't show up
+
+Todos:
+    ) A robust and easy for use window manager.
+        If some window is switched by a key, it will tend to remained there in
+        the panel inorder to easily switch to it using that same key later.
+        Windows not in switch history will flow during open/close actions.
+
+        For example, initial 4 windows, all without switch history:
+
+            *a(1) b(2) c(3) d(4)
+
+        (Format `<wnd>(<hotkey>)`, `*` for current window)
+
+        User switch to `b`
+
+            a(1) *[b(2)] c(3) d(4)
+
+        (`[..]` for historically switched window)
+
+        Switch to and close `a`
+
+            c(1) *[b(2)] d(3)
+
+        Switch to `d`
+
+            c(1) [b(2)] *[d(3)]
+
+        Open a new window `e`
+
+            c(1) [b(2)] [d(3)] *e(4)
+
+        Note there will be holes if user close a middle window while all
+        windows are in history. But that's fine because holes will quickly be
+        filled by new opened windows.
 '''
 from ctypes import windll
 import logging
@@ -20,7 +53,7 @@ import config
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 logger.setLevel(logging.INFO)
-#logger.setLevel(logging.WARNING)
+logger.setLevel(logging.WARNING)
 logging.getLogger('keyboard').setLevel(logging.INFO)
 
 HORZ_MARGIN_RATIO = 0.08
@@ -43,6 +76,7 @@ class Widget(QDialog):
         self.triggering = False
 
         self.keyboard = Keyboard()
+        # ctrl alt to invoke panel
         self.keyboard.on('ctrl alt', self.on_activate)
         self.keyboard.on('alt ctrl', self.on_activate)
         #self.keyboard.on('lalt', self.on_activate)
