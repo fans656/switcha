@@ -1,11 +1,16 @@
 import locale
+from functools import partial
 
 import win32gui
 import win32con
+from f6 import each
 
-from thumbnail import ThumbnailRender
+try:
+    from thumbnail import Thumbnail
+except ImportError:
+    pass
 
-__all__ = ['enum_windows', 'Windodws']
+__all__ = ['enum_windows', 'Windodws', 'RendableWindows']
 
 def enum_windows():
     hwnds = []
@@ -37,22 +42,47 @@ def is_alt_tab_window(hwnd):
 class Window(object):
 
     def __init__(self, hwnd=None):
-        self._hwnd = hwnd
+        self.hwnd = hwnd
+
+    def activate(self):
+        hwnd = self.hwnd
+        _, showCmd, _, _, _ = win32gui.GetWindowPlacement(hwnd)
+        minimized = showCmd == win32con.SW_SHOWMINIMIZED
+        cmdShow = win32con.SW_RESTORE if minimized else win32con.SW_SHOW
+        win32gui.ShowWindow(hwnd, cmdShow)
+        win32gui.SetForegroundWindow(hwnd)
 
     @property
     def title(self):
         lang, encoding = locale.getdefaultlocale()
-        return win32gui.GetWindowText(self._hwnd).decode(encoding)
+        return win32gui.GetWindowText(self.hwnd).decode(encoding)
 
     @property
     def current(self):
-        return self._hwnd == win32gui.GetForegroundWindow()
+        return self.hwnd == win32gui.GetForegroundWindow()
 
     def __eq__(self, o):
-        return self._hwnd == o._hwnd
+        return self.hwnd == o.hwnd
 
     def __hash__(self):
-        return hash(self._hwnd)
+        return hash(self.hwnd)
+
+class RendableWindow(Window):
+
+    def __init__(self, hwnd, target):
+        super(RendableWindow, self).__init__(hwnd)
+        self.thumb = Thumbnail(target, hwnd)
+
+    def render(self, rc):
+        self.thumb.render(rc)
+
+    @property
+    def width(self):
+        return self.thumb.width
+
+    @property
+    def height(self):
+        return self.thumb.height
 
 class DummyWindow(Window):
 
@@ -80,7 +110,8 @@ class Windows(object):
         new = get_windows()
         wnds = [DummyWindow()] * max(len(old), len(new))
         for wnd in set(new) & set(old):
-            wnds[old.index(wnd)] = wnd
+            idx = old.index(wnd)
+            wnds[idx] = old[idx]
         i = 0
         for wnd in set(new) - set(old):
             while wnds[i]:
@@ -90,16 +121,50 @@ class Windows(object):
             del wnds[-1]
         self.wnds = wnds
 
+    def __len__(self):
+        return len(self.wnds)
+
     def __iter__(self):
         return iter(self.wnds)
+
+    def __getitem__(self, i):
+        return self.wnds[i]
+
+    def __setitem__(self, i, v):
+        self.wnds[i] = v
+
+class RendableWindows(Windows):
+
+    def __init__(self, target):
+        """Create a windows manager support rendering
+
+        Args:
+            target - a QWidget target to render thumbnails to
+        """
+        super(RendableWindows, self).__init__()
+        assert all(not isinstance(w, DummyWindow) for w in self.wnds)
+        self.wnds = [RendableWindow(w.hwnd, target) for w in self.wnds]
+        self.target = target
+        wnds = self.wnds
+        if len(wnds) < 8:
+            main, other = wnds[:4], wnds[4:]
+            padding = [DummyWindow() for _ in xrange(4 - len(other))]
+            self.wnds = other + padding + main
+
+    def update(self):
+        super(RendableWindows, self).update()
+        wnds = self.wnds
+        for i, wnd in enumerate(wnds):
+            if not wnd or isinstance(wnd, RendableWindow):
+                continue
+            wnds[i] = RendableWindow(wnd.hwnd, self.target)
 
 if __name__ == '__main__':
     wnds = map(Window, alt_tab_windows())
     for wnd in wnds:
         symbol = '*' if wnd.current else ' '
         print u'{} {}'.format(symbol, wnd.title)
-#exit()
-#
+
 #class Window(object):
 #
 #    @staticmethod

@@ -1,11 +1,9 @@
 # coding: utf8
 '''
 Bugs:
-    ) run, win-e to open a new explorer, alt-0 to switch to last => Exception
-    ) run, open many explorer, ctrl-alt invoke panel, new windows don't show up
 
 Todos:
-    ) Trim window title by pixel width, not char length
+    ) window thumbnail image data
     ) Ctrl-Alt-[1-9] for non first 8 windows
 '''
 import logging
@@ -19,7 +17,7 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
 from keyboard import Keyboard
-from window import Windows
+from window import RendableWindows
 import config
 
 logger = logging.getLogger(__name__)
@@ -27,11 +25,6 @@ logger.setLevel(logging.DEBUG)
 logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
 #logging.getLogger('keyboard').setLevel(logging.INFO)
-
-HORZ_MARGIN_RATIO = 0.08
-VERT_MARGIN_RATIO = 0.1
-HORZ_GAP_RATIO = 0.1
-VERT_GAP_RATIO = 0.1
 
 VK_OEM_SEMICOLON = 0xba
 VK_OEM_PERIOD = 0xbe
@@ -108,7 +101,7 @@ class Widget(QDialog):
         #self.register_hotkey('F', self.pin_to_next, args=(),
         #                     alt=True, shift=True)
 
-        self.wnds = Windows(self)
+        self.wnds = RendableWindows(self)
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
@@ -285,59 +278,85 @@ class Widget(QDialog):
 
     def paintEvent(self, ev):
         painter = QPainter(self)
-
+        fm = painter.fontMetrics()
+        wnds = self.wnds
+        n_rows, n_cols = get_rowcols(wnds)
         # white pen
         color = QColor(config.TITLE_COLOR)
         pen = painter.pen()
         pen.setColor(color)
         painter.setPen(pen)
-
         # darken background
         color = QColor(config.BACK_COLOR)
         color.setAlpha(int(255 * (max(0.0, min(config.DARKEN_RATIO, 1.0)))))
         painter.fillRect(self.rect(), color)
-
-        wnds = self.wnds
+        # metrics
         canvas_width = self.width()
         canvas_height = self.height()
-        horz_margin = canvas_width * HORZ_MARGIN_RATIO
-        vert_margin = canvas_height * VERT_MARGIN_RATIO
-        board_width = canvas_width - 2 * horz_margin
-        board_height = canvas_height - 2 * vert_margin
-
-        n = len(wnds)
-        if n <= 4:
-            n_rows = 1
-            n_cols = n
-        elif n <= 8:
-            n_rows = 2
-            n_cols = 4
-        elif n <= 12:
-            n_rows = 3
-            n_cols = 4
-        elif n <= 16:
-            n_rows = 4
-            n_cols = 4
-        else:
-            n_rows = (n + 3) // 4
-            n_cols = 4
-
+        left_margin = canvas_width * config.LEFT_MARGIN_RATIO
+        right_margin = canvas_width * config.RIGHT_MARGIN_RATIO
+        top_margin = canvas_height * config.TOP_MARGIN_RATIO
+        bottom_margin = canvas_height * config.BOTTOM_MARGIN_RATIO
+        board_width = canvas_width - left_margin - right_margin
+        board_height = canvas_height - top_margin - bottom_margin
         slot_width = board_width / float(n_cols)
         slot_height = board_height / float(n_rows)
-        horz_gap = slot_width * HORZ_GAP_RATIO
-        vert_gap = slot_width * VERT_GAP_RATIO
-        item_width = slot_width - 0.5 * horz_gap
-        item_height = slot_height - 0.5 * vert_gap
-        item_wh_ratio = item_width / item_height
-        i_wnd = 0
-        for row in xrange(n_rows):
-            for col in xrange(n_cols):
-                if i_wnd == len(wnds):
-                    break
-                wnd = wnds[i_wnd]
-                x = horz_margin + (item_width + horz_gap) * col
-                y = vert_margin + (item_height + vert_gap) * row
+        horz_gap = max(slot_width * config.HORZ_GAP_RATIO, 1)
+        vert_gap = max(slot_width * config.VERT_GAP_RATIO, fm.lineSpacing())
+        item_width = (board_width - (n_cols - 1) * horz_gap) / float(n_cols)
+        item_height = (board_height - (n_rows - 1) * vert_gap) / float(n_rows)
+        # probe layout
+        layouts, baselines = do_layout(
+            wnds, left_margin, top_margin, item_width, item_height,
+            n_rows, n_cols, horz_gap, vert_gap)
+        # actual metrics
+        rc_thumbs = [lt['rc_thumb'] for lt in layouts]
+        item_width = max(rc.width() for rc in rc_thumbs)
+        item_height = max(rc.height() for rc in rc_thumbs)
+        horz_save = board_width - (item_width + horz_gap) * n_cols - horz_gap
+        vert_save = board_height - (item_height + vert_gap) * n_rows - vert_gap
+        left_margin += horz_save / 2.0
+        top_margin += vert_save / 2.0
+        right_margin += horz_save / 2.0
+        old_bottom_margin = bottom_margin
+        bottom_margin += vert_save / 2.0
+        # actual layout
+        layouts, baselines = do_layout(
+            wnds, left_margin, top_margin, item_width, item_height,
+            n_rows, n_cols, horz_gap, vert_gap)
+        # painting
+        for lt in layouts:
+            wnd = lt['wnd']
+            row = lt['row']
+            rc_item = lt['rc_item']
+            rc_thumb = lt['rc_thumb']
+            if wnd:
+                wnd.render(rc_thumb)
+            if wnd:
+                draw_title(painter, wnd, rc_item,
+                           baselines[row] + fm.lineSpacing())
+            else:
+                draw_dummy_window(painter, rc_item)
+        rc_bottom = QRect(0, canvas_height - old_bottom_margin,
+                          canvas_width, old_bottom_margin)
+        draw_datetime(painter, rc_bottom)
 
+def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
+              horz_gap, vert_gap):
+    layouts = []
+    baselines = {}
+    item_wh_ratio = item_width / float(item_height)
+    for row in xrange(n_rows):
+        baseline = 0
+        for col in xrange(n_cols):
+            i_wnd = row * n_cols + col
+            if i_wnd == len(wnds):
+                break
+            wnd = wnds[i_wnd]
+            x = xbeg + (item_width + horz_gap) * col
+            y = ybeg + (item_height + vert_gap) * row
+            rc_item = QRect(x, y, item_width, item_height)
+            if wnd:
                 wh_ratio = wnd.width / float(wnd.height)
                 if wh_ratio > item_wh_ratio:
                     thumb_width = min(item_width, wnd.width)
@@ -347,37 +366,76 @@ class Widget(QDialog):
                     thumb_width = thumb_height * wh_ratio
                 x_offset = (item_width - thumb_width) / 2.0
                 y_offset = (item_height - thumb_height) / 2.0
-                x += x_offset
-                y += y_offset
-                rc = QRect(x, y, thumb_width, thumb_height)
-                wnd.render(rc)
+                rc_thumb = QRect(x + x_offset, y + y_offset,
+                                 thumb_width, thumb_height)
+            else:
+                rc_thumb = QRect()
+            baseline = max(baseline, rc_thumb.bottom())
+            layouts.append({
+                'wnd': wnd,
+                'row': row,
+                'rc_item': rc_item,
+                'rc_thumb': rc_thumb,
+            })
+        baselines[row] = baseline
+    return layouts, baselines
 
-                # draw title
-                hotkey = HOTKEYS_WHEN_ACTIVE_REVERSE_INDEXES.get(
-                    i_wnd, None)
-                lim = 25
-                title = wnd.title
-                title = title[:lim] + ('...' if len(title) > lim else '')
-                if hotkey is not None:
-                    title = u'【{}】'.format(hotkey) + title
-                if wnd.current:
-                    painter.save()
-                    pen = painter.pen()
-                    pen.setColor(QColor(config.ACTIVE_TITLE_COLOR))
-                    painter.setPen(pen)
-                painter.drawText(rc.left(), rc.bottom() + 20, title)
-                if wnd.current:
-                    painter.restore()
+def draw_dummy_window(painter, rc):
+    painter.save()
+    font = painter.font()
+    font.setPixelSize(30)
+    painter.setFont(font)
+    pen = painter.pen()
+    color = QColor('#fff')
+    color.setAlpha(25)
+    pen.setColor(color)
+    painter.setPen(pen)
+    painter.drawText(rc, Qt.AlignCenter, 'Available')
+    painter.restore()
 
-                i_wnd += 1
+def draw_datetime(painter, rc):
+    painter.save()
+    font = painter.font()
+    font.setPixelSize(30)
+    painter.setFont(font)
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    painter.drawText(rc, Qt.AlignCenter, now)
+    painter.restore()
 
+def draw_title(painter, wnd, rc_item, baseline):
+    fm = painter.fontMetrics()
+    marker_width = fm.boundingRect(u'【U】').width()
+    title_width = rc_item.width() - marker_width
+    title = fm.elidedText(wnd.title, Qt.ElideRight, title_width)
+    x = rc_item.left() + marker_width
+    if wnd.current:
         painter.save()
-        font = painter.font()
-        font.setPixelSize(30)
-        painter.setFont(font)
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        painter.drawText(self.rect(), Qt.AlignBottom | Qt.AlignCenter, now)
+        pen = painter.pen()
+        pen.setColor(QColor(config.ACTIVE_TITLE_COLOR))
+        painter.setPen(pen)
+        painter.drawText(x, baseline, title)
         painter.restore()
+    else:
+        painter.drawText(x, baseline, title)
+
+def get_rowcols(wnds):
+    n = len(wnds)
+    if n <= 4:
+        rows = 1
+        cols = n
+    elif n <= 8:
+        rows = 2
+        cols = 4
+    elif n <= 12:
+        rows = 3
+        cols = 4
+    elif n <= 16:
+        rows = 4
+        cols = 4
+    else:
+        rows = (n + 3) // 4
+        cols = 4
+    return rows, cols
 
 app = QApplication([])
 

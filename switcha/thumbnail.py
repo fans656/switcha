@@ -3,7 +3,7 @@ from PySide.QtGui import *
 import ctypes
 import win32gui
 
-__all__ = ['ThumbnailRender']
+__all__ = ['Thumbnail']
 
 DWM_TNP_RECTDESTINATION = 0x00000001
 DWM_TNP_RECTSOURCE = 0x00000002
@@ -40,7 +40,7 @@ class ThumbProp(ctypes.Structure):
         ('fSourceClientAreaOnly', ctypes.c_byte),
     ]
 
-class ThumbnailRender(object):
+class Thumbnail(object):
 
     def __init__(self, dst, src):
         '''
@@ -55,10 +55,22 @@ class ThumbnailRender(object):
         self.thumbnail = ctypes.c_long()
         dwmapi.DwmRegisterThumbnail(
             int(self.dst.winId()), self.src, ctypes.byref(self.thumbnail))
-        # query window size
+        self._width = self._height = 0
+
+    @property
+    def width(self):
+        self.update()
+        return self._width
+
+    @property
+    def height(self):
+        self.update()
+        return self._height
+
+    def update(self):
         sz = SIZE()
         dwmapi.DwmQueryThumbnailSourceSize(self.thumbnail, ctypes.byref(sz))
-        self.width, self.height = sz.cx, sz.cy
+        self._width, self._height = sz.cx, sz.cy
 
     def __del__(self):
         dwmapi.DwmUnregisterThumbnail(self.thumbnail)

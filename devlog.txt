@@ -103,3 +103,6 @@ https://blogs.msdn.microsoft.com/oldnewthing/20090226-00/?p=19013/
     Note there will be holes if user close a middle window while all
     windows are in history. But that's fine because holes will quickly be
     filled by new opened windows.
+
+2017-05-28 20:05:30
+. Trim window title by pixel width, not char length
