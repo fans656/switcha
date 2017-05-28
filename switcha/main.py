@@ -1,6 +1,7 @@
 # coding: utf8
 '''
 Bugs:
+    ) thumb flash between frameless & framed
 
 Todos:
     ) memorized pin (window title? executable path?)
@@ -320,7 +321,7 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
                 rc_thumb = QRect(x + x_offset, y + y_offset,
                                  thumb_width, thumb_height)
             else:
-                rc_thumb = QRect()
+                rc_thumb = rc_item
             baseline = max(baseline, rc_thumb.bottom())
             layouts.append({
                 'wnd': wnd,
@@ -334,7 +335,7 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
 def draw_dummy_window(painter, rc):
     painter.save()
     font = painter.font()
-    font.setPixelSize(rc.height() * 0.25)
+    font.setPixelSize(min(rc.height() * 0.25, 30))
     painter.setFont(font)
     pen = painter.pen()
     color = QColor('#fff')

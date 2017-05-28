@@ -109,3 +109,10 @@ https://blogs.msdn.microsoft.com/oldnewthing/20090226-00/?p=19013/
 
 2017-05-28 22:53:51
 . Ctrl-Alt-[1-9] for non first 8 windows
+
+2017-05-29 07:42:28
+bug fix
+. when UIOP line has no window, marker go to top of the screen
+solution: let dummy window rc_thumb = rc_item
+. too big 'Availble' font size
+solution: min(rc_item.height() * 0.25, 30)
