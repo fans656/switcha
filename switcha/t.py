@@ -9,21 +9,34 @@ class Widget(QDialog):
 
     def __init__(self, parent=None):
         super(Widget, self).__init__(parent)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint)
         self.wnds = Windows()
-        self.wnds.show()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_windows)
+        self.timer.start(100)
 
     def keyPressEvent(self, ev):
-        ch = str(ev.text())
-        idx = ord(ch) - ord('1')
-        if 1 <= idx <= 9:
-            self.wnds.switch_to(idx, activate=False)
-            self.wnds.show()
-        elif ch in string.lowercase:
-            self.wnds.update()
-            self.wnds.show()
+        #if ev.text() == 'j':
+        #    self.update_windows()
         return super(Widget, self).keyPressEvent(ev)
+
+    def update_windows(self):
+        self.wnds.update()
+        self.update()
+
+    def paintEvent(self, ev):
+        painter = QPainter(self)
+        fm = painter.fontMetrics()
+        linespacing = 2 * fm.lineSpacing()
+        for i, wnd in enumerate(self.wnds):
+            title = wnd.title
+            mark = '*' if wnd.current else ' '
+            text = u'{} {}'.format(mark, title)
+            painter.drawText(50, 30 + i * linespacing, text)
 
 app = QApplication([])
 w = Widget()
+w.resize(480, 640)
+w.move(1366 / 2.0, 0)
 w.show()
 app.exec_()
