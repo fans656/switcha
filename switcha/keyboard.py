@@ -9,7 +9,7 @@ from f6 import bunch
 
 import config
 
-__all__ = ['Keyboard']
+__all__ = ['Keyboard', 'parse_seq']
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,11 @@ class Keyboard(object):
                        for k in xrange(255)]
         self._hook()
 
-    def on(self, seq, callback):
+    @staticmethod
+    def seq(self):
+        return parse_seq(seq)
+
+    def on(self, seq, callback, args=()):
         """Listen on specific key sequence
 
         Register callback on specific key stroke sequence.
@@ -58,9 +62,10 @@ class Keyboard(object):
             logger.warning(
                 'invalid callback in sequence "{}", will use nop'.format(seq))
         try:
-            seqs = parse_seq(seq)
+            seqs = parse_seq(seq) if not isinstance(seq, Sequence) else seq
             for seq in seqs:
                 seq.callback = callback
+                seq.args = args
                 self._seqs.append(seq)
                 logger.info('register {} '.format(repr(seq)))
             return seqs
@@ -78,13 +83,8 @@ class Keyboard(object):
         logger.debug('{:>8}({}) {:4}'.format(
             ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
         self._state[ev.KeyID] = ev.down
-        if not ev.down:
-            assert ev.up
-            #print map(int, self._state)
-            #print signature_str(self.downs)
         sig = self.downs
         logger.debug('downs: {}'.format(signature_str(sig)))
-        #print map(signature_str, self._seqs.keys())
         for seq in self._seqs:
             if sig != seq.signature:
                 continue
@@ -95,7 +95,7 @@ class Keyboard(object):
             match = ev.KeyID == seq.trigger and ev.up == seq.up
             if match:
                 logger.info('"{}" detected'.format(str(seq)))
-                r = seq.callback(seq)
+                r = seq.callback(*seq.args)
                 if r is None:
                     return 1
                 return 1 if r else 0
@@ -116,13 +116,15 @@ class Keyboard(object):
 
 class Sequence(object):
 
-    def __init__(self, trigger, up, modifiers, signature, seq, callback=None):
+    def __init__(self, trigger, up, modifiers, signature, seq,
+                 callback=None, args=()):
         self.trigger = trigger
         self.up = up
         self.modifiers = modifiers
         self.signature = signature
         self.seq = seq
         self.callback = callback
+        self.args = args
 
     def __str__(self):
         return self.seq

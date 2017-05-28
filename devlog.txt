@@ -106,3 +106,6 @@ https://blogs.msdn.microsoft.com/oldnewthing/20090226-00/?p=19013/
 
 2017-05-28 20:05:30
 . Trim window title by pixel width, not char length
+
+2017-05-28 22:53:51
+. Ctrl-Alt-[1-9] for non first 8 windows

@@ -1,4 +1,5 @@
 import locale
+import logging
 from functools import partial
 
 import win32gui
@@ -12,6 +13,12 @@ except ImportError:
 
 __all__ = ['enum_windows', 'Windodws', 'RendableWindows']
 
+Normal = 0
+Switched = 1
+Pinned = 2
+
+logger = logging.getLogger(__name__)
+
 def enum_windows():
     hwnds = []
     win32gui.EnumWindows(lambda hwnd, _: hwnds.append(hwnd), None)
@@ -22,8 +29,8 @@ def alt_tab_windows(hwnds=None):
         hwnds = enum_windows()
     return filter(is_alt_tab_window, hwnds)
 
-def get_windows():
-    wnds = map(Window, alt_tab_windows())
+def get_windows(wnds=None):
+    wnds = [Window(hwnd, wnds=wnds) for hwnd in alt_tab_windows()]
     wnds = filter(lambda w: w.title != 'Program Manager', wnds)
     return wnds
 
@@ -41,8 +48,10 @@ def is_alt_tab_window(hwnd):
 
 class Window(object):
 
-    def __init__(self, hwnd=None):
+    def __init__(self, hwnd, wnds):
         self.hwnd = hwnd
+        self.wnds = wnds
+        self.status = Normal
 
     def activate(self):
         hwnd = self.hwnd
@@ -51,6 +60,22 @@ class Window(object):
         cmdShow = win32con.SW_RESTORE if minimized else win32con.SW_SHOW
         win32gui.ShowWindow(hwnd, cmdShow)
         win32gui.SetForegroundWindow(hwnd)
+        self.status = max(Switched, self.status)
+
+    def pin_to(self, i):
+        if i < 0:
+            logger.warning('{} pin to {}?'.format(self.index, i))
+            return False
+        logger.info('{} pin to {}'.format(self.index, i))
+        wnds = self.wnds
+        if i >= len(wnds):
+            wnds.extend([DummyWindow(wnds=self.wnds)
+                         for _ in xrange(i + 1 - len(wnds))])
+        j = self.index
+        logger.debug('target: {}, source: {}'.format(i, j))
+        wnds[i], wnds[j] = wnds[j], wnds[i]
+        self.status = Pinned
+        return True
 
     @property
     def title(self):
@@ -61,6 +86,22 @@ class Window(object):
     def current(self):
         return self.hwnd == win32gui.GetForegroundWindow()
 
+    @property
+    def index(self):
+        return self.wnds.index(self)
+
+    @property
+    def pinned(self):
+        return self.status == Pinned
+
+    @property
+    def switched(self):
+        return self.status == Switched
+
+    @property
+    def normal(self):
+        return self.status == Normal
+
     def __eq__(self, o):
         return self.hwnd == o.hwnd
 
@@ -69,8 +110,9 @@ class Window(object):
 
 class RendableWindow(Window):
 
-    def __init__(self, hwnd, target):
-        super(RendableWindow, self).__init__(hwnd)
+    def __init__(self, hwnd, target, *args, **kwds):
+        assert 'wnds' in kwds
+        super(RendableWindow, self).__init__(hwnd, *args, **kwds)
         self.thumb = Thumbnail(target, hwnd)
 
     def render(self, rc):
@@ -86,8 +128,8 @@ class RendableWindow(Window):
 
 class DummyWindow(Window):
 
-    def __init__(self):
-        super(DummyWindow, self).__init__(None)
+    def __init__(self, *args, **kwds):
+        super(DummyWindow, self).__init__(hwnd=None, *args, **kwds)
 
     @property
     def title(self):
@@ -97,29 +139,86 @@ class DummyWindow(Window):
     def current(self):
         return False
 
+    @property
+    def index(self):
+        # Window.__eq__ is based on `hwnd`
+        # DummyWindow's `hwnd` is always `None`
+        # rewrite to get the right index in case of mutiple dummies
+        return next(i for i, w in enumerate(self.wnds) if w is self)
+
     def __nonzero__(self):
         return False
 
 class Windows(object):
 
     def __init__(self):
-        self.wnds = get_windows()
+        self.wnds = get_windows(self)
 
     def update(self):
         old = self.wnds
-        new = get_windows()
-        wnds = [DummyWindow()] * max(len(old), len(new))
+        new = get_windows(self)
+        wnds = [DummyWindow(wnds=self)
+                for _ in xrange(max(len(old), len(new)))]
+        # stick old windows
         for wnd in set(new) & set(old):
             idx = old.index(wnd)
             wnds[idx] = old[idx]
+        # flow new windows
         i = 0
         for wnd in set(new) - set(old):
             while wnds[i]:
                 i += 1
             wnds[i] = wnd
+        # fill middle holes
+        for i in xrange(4, len(wnds)):
+            wnd = wnds[i]
+            if wnd:
+                continue
+            j = next((j for j in xrange(i + 1, len(wnds))
+                     if wnds[j] and wnds[j].normal), None)
+            if j is None:
+                break
+            wnds[i], wnds[j] = wnds[j], wnds[i]
+        # trim tail holes
         while not wnds[-1]:
             del wnds[-1]
         self.wnds = wnds
+
+    @property
+    def current_index(self):
+        return
+
+    @property
+    def current(self):
+        return next((w for w in self.wnds if w.current), None)
+
+    @property
+    def has_current(self):
+        return self.current_index != -1
+
+    @property
+    def next(self):
+        i = self.current_index
+        while True:
+            i = (i + 1) % len(self)
+            wnd = self[i]
+            if wnd:
+                return wnd
+
+    @property
+    def prev(self):
+        i = self.current_index
+        while True:
+            i = (i - 1 + len(self)) % len(self)
+            wnd = self[i]
+            if wnd:
+                return wnd
+
+    def index(self, wnd):
+        return self.wnds.index(wnd)
+
+    def extend(self, a):
+        self.wnds.extend(a)
 
     def __len__(self):
         return len(self.wnds)
@@ -143,12 +242,13 @@ class RendableWindows(Windows):
         """
         super(RendableWindows, self).__init__()
         assert all(not isinstance(w, DummyWindow) for w in self.wnds)
-        self.wnds = [RendableWindow(w.hwnd, target) for w in self.wnds]
+        self.wnds = [RendableWindow(w.hwnd, target, wnds=self)
+                     for w in self.wnds]
         self.target = target
         wnds = self.wnds
         if len(wnds) < 8:
             main, other = wnds[:4], wnds[4:]
-            padding = [DummyWindow() for _ in xrange(4 - len(other))]
+            padding = [DummyWindow(wnds=self) for _ in xrange(4 - len(other))]
             self.wnds = other + padding + main
 
     def update(self):
@@ -157,179 +257,5 @@ class RendableWindows(Windows):
         for i, wnd in enumerate(wnds):
             if not wnd or isinstance(wnd, RendableWindow):
                 continue
-            wnds[i] = RendableWindow(wnd.hwnd, self.target)
-
-if __name__ == '__main__':
-    wnds = map(Window, alt_tab_windows())
-    for wnd in wnds:
-        symbol = '*' if wnd.current else ' '
-        print u'{} {}'.format(symbol, wnd.title)
-
-#class Window(object):
-#
-#    @staticmethod
-#    def dummy(self):
-#        return Window(hwnd=None, title=None, widget=None)
-#
-#    def __init__(self, hwnd, title, widget=None, wnds=None):
-#        self.hwnd = hwnd
-#        self.title = title
-#        self.widget = widget
-#        self.wnds = wnds
-#        self.pinned = False
-#
-#        if widget:
-#            self.thumbnail = ThumbnailRender(dst=widget, src=hwnd)
-#            self.width = self.thumbnail.width
-#            self.height = self.thumbnail.height
-#
-#    def activate(self):
-#        hwnd = self.hwnd
-#        _, showCmd, _, _, _ = win32gui.GetWindowPlacement(hwnd)
-#        if showCmd == win32con.SW_SHOWMINIMIZED:
-#            r = win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-#        else:
-#            r = win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-#        r = win32gui.SetForegroundWindow(hwnd)
-#        self.wnds.update()
-#
-#    @property
-#    def current(self):
-#        return self.hwnd == win32gui.GetForegroundWindow()
-#
-#    @property
-#    def index(self):
-#        return self.wnds.index(self)
-#
-#    def render(self, rc=None):
-#        self.thumbnail.render(rc)
-#
-#    def __eq__(self, o):
-#        return self.hwnd == o.hwnd
-#
-#    def __hash__(self):
-#        return self.hwnd
-#
-#    def __repr__(self):
-#        return repr(self.title[:8])
-#
-#class Windows(object):
-#
-#    def __init__(self, widget=None):
-#        self.widget = widget
-#        self.wnds = enum_windows(widget=widget, wnds=self)
-#
-#    def update(self):
-#        old_wnds = self.wnds
-#        new_wnds = enum_windows(widget=self.widget, wnds=self)
-#        wnds = [None] * len(new_wnds)
-#        for wnd in new_wnds:
-#            if wnd in old_wnds:
-#                i = next(i for i, w in enumerate(old_wnds)
-#                         if wnd.hwnd == w.hwnd)
-#                assert wnd.hwnd == old_wnds[i].hwnd
-#                wnds[i] = wnd
-#        i = 0
-#        for wnd in new_wnds:
-#            if wnd not in old_wnds:
-#                while wnds[i]:
-#                    i += 1
-#                wnds[i] = wnd
-#        self.wnds = wnds
-#        #print 'old_wnds'
-#        #print_wnds(old_wnds)
-#        #print 'new_wnds'
-#        #print_wnds(new_wnds)
-#        #print wnds
-#        #print [w.index for w in wnds]
-#        #exit()
-#
-#    @property
-#    def current(self):
-#        if self.wnds:
-#            return self.wnds[self.current_index]
-#        else:
-#            return Window.dummy()
-#
-#    @property
-#    def next(self):
-#        idx = (self.wnds.current_index - 1 + len(self.wnds)) % len(self.wnds)
-#        return self.wnds[idx] if self.wnds else None
-#
-#    @property
-#    def first(self):
-#        return self.wnds[0] if self.wnds else None
-#
-#    @property
-#    def last(self):
-#        return self.wnds[0] if self.wnds else None
-#
-#    @property
-#    def next(self):
-#        return (self.wnds.current_index + 1) % len(self.wnds)
-#
-#    @property
-#    def current_index(self):
-#        cur = win32gui.GetForegroundWindow()
-#        return next(i for i, wnd in enumerate(self.wnds) if wnd.hwnd == cur)
-#
-#    @property
-#    def next(self):
-#        return self[(self.current_index + 1) % len(self)]
-#
-#    @property
-#    def prev(self):
-#        return self[(self.current_index - 1 + len(self)) % len(self)]
-#
-#    def index(self, wnd):
-#        try:
-#            return self.wnds.index(wnd)
-#        except ValueError:
-#            return -1
-#
-#    def switch_to(self, idx, activate=True):
-#        if not 0 <= idx < len(self):
-#            return False
-#        wnd = self.wnds[idx]
-#        wnd.pinned = True
-#        if activate:
-#            wnd.activate()
-#
-#    def show(self):
-#        print_wnds(self.wnds)
-#        print
-#
-#    def __iter__(self):
-#        return iter(self.wnds)
-#
-#    def __getitem__(self, i):
-#        return self.wnds[i]
-#
-#    def __setitem__(self, i, o):
-#        self.wnds[i] = o
-#
-#    def __len__(self):
-#        return len(self.wnds)
-#
-#def print_wnds(wnds):
-#    max_title_len = 40
-#    for wnd in wnds:
-#        try:
-#            i = wnd.index
-#            idx = '{:2}'.format(i + 1)
-#            if wnd.pinned:
-#                idx = '[{}]'.format(idx)
-#            else:
-#                idx = ' {} '.format(idx)
-#            idx = '*{}'.format(idx) if wnd.current else ' {}'.format(idx)
-#            title = (wnd.title[:max_title_len]
-#                     + ('...' if len(wnd.title) > max_title_len else ''))
-#            print '{} {:10} {}'.format(idx, wnd.hwnd, title)
-#        except Exception:
-#            print 'Unknown'
-#
-#if __name__ == '__main__':
-#    wnds = Windows()
-#    #wnds.switch_to(2 - 1)
-#    #wnds.switch_to(4 - 1)
-#    wnds.show()
+            wnds[i] = RendableWindow(wnd.hwnd, self.target, wnds=self)
+        assert all(w.wnds for w in self.wnds)

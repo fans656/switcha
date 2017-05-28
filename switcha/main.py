@@ -3,8 +3,11 @@
 Bugs:
 
 Todos:
-    ) window thumbnail image data
-    ) Ctrl-Alt-[1-9] for non first 8 windows
+    ) memorized pin (window title? executable path?)
+    ) similar window replace previous closed slot (chrome)
+    ) custom regex slot rule (chrome, vim)
+
+    ..) window thumbnail image data
 '''
 import logging
 from datetime import datetime
@@ -21,36 +24,28 @@ from window import RendableWindows
 import config
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
 #logging.getLogger('keyboard').setLevel(logging.INFO)
+#logging.getLogger('window').setLevel(logging.DEBUG)
 
-VK_OEM_SEMICOLON = 0xba
-VK_OEM_PERIOD = 0xbe
-VK_OEM_2 = 0xbf
-VK_OEM_COMMA = 0xbc
+# https://msdn.microsoft.com/en-us/library/windows/desktop/dd375731(v=vs.85).aspx
+SEMICOLON = chr(0xba)
+PERIOD = chr(0xbe)
+COMMA = chr(0xbc)
+SLASH = chr(0xbf)
 
-HOTKEYS_WHEN_ACTIVE = OrderedDict([
-    ('U', 'U'),
-    ('I', 'I'),
-    ('O', 'O'),
-    ('P', 'P'),
-    ('J', 'J'),
-    ('K', 'K'),
-    ('L', 'L'),
-    (chr(VK_OEM_SEMICOLON), ';'),
-    ('M', 'M'),
-    (chr(VK_OEM_COMMA), ','),
-    (chr(VK_OEM_PERIOD), '.'),
-    (chr(VK_OEM_2), '/'),
-])
-HOTKEYS_WHEN_ACTIVE_INDEXES = {
-    ch: i for i, ch in enumerate(HOTKEYS_WHEN_ACTIVE.values()[:8])
-}
-HOTKEYS_WHEN_ACTIVE_REVERSE_INDEXES = {
-    i: ch for ch, i in HOTKEYS_WHEN_ACTIVE_INDEXES.items()
-}
+# 18 directly switch hotkeys
+# e.g. Alt-U => 1st, Alt-I => 2nd, ..., Alt-1 => 9th, Alt-0 => 18th
+DIRECT_SWITCH_HOTKEYS = 'UIOPJKL' + SEMICOLON + '1234567890'
+DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPJKL;1234567890'
+
+class Res(object):
+
+    def __init__(self):
+        self.pin_icon = QPixmap('./img/pin.png').scaled(
+            16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
 class Widget(QDialog):
 
@@ -62,90 +57,76 @@ class Widget(QDialog):
                             | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background:transparent;")
-
-        self.active = False
-
-        self.keyboard = Keyboard()
-        # ctrl alt to invoke panel
-        self.keyboard.on('ctrl alt', self.on_activate)
-        self.keyboard.on('alt ctrl', self.on_activate)
-        #self.keyboard.on('lalt', self.on_activate)
-        self.keyboard.on('ctrl alt^', self.on_deactivate)
-        self.keyboard.on('alt ctrl^', self.on_deactivate)
-        #self.keyboard.on('lalt^', self.on_deactivate)
-
         # hot key must be register after those setWindowFlags/setAttribute
         # guess Windows is identifying our window based on that
+
+        self.res = Res()
+
+        self.kbd = kbd = Keyboard()
+        # ctrl alt to invoke panel
+        kbd.on('ctrl alt', self.on_activate)
+        kbd.on('alt ctrl', self.on_activate)
+        kbd.on('ctrl alt^', self.on_deactivate)
+        kbd.on('alt ctrl^', self.on_deactivate)
+
         self._hotkey_handlers = {}
         self._hotkey_ids_when_active = []
 
-        # switch / pin
-        for i, (ch, arg) in enumerate(HOTKEYS_WHEN_ACTIVE.items()):
-            self.register_hotkey(ch, self.switch_to_index, args=(i,),
-                                 alt=True)
-            self.register_hotkey(ch, self.pin_to_index, args=(i,),
-                                 alt=True, shift=True)
-
-        # switch/pin to last (0)
-        #self.register_hotkey('0', self.switch_to_last, args=(), alt=True)
-        #self.register_hotkey('0', self.pin_to_last, args=(),
-        #                     alt=True, shift=True)
-
-        ## switch/pin to prev
-        #self.register_hotkey('D', self.switch_to_prev, args=(), alt=True)
-        #self.register_hotkey('D', self.pin_to_prev, args=(),
-        #                     alt=True, shift=True)
-
-        ## switch/pin to next
-        #self.register_hotkey('F', self.switch_to_next, args=(), alt=True)
-        #self.register_hotkey('F', self.pin_to_next, args=(),
-        #                     alt=True, shift=True)
-
-        self.wnds = RendableWindows(self)
+        on_hotkey = self.on_hotkey
+        # switch/pin to prev/next
+        on_hotkey('alt', COMMA, self.switch_to_prev)
+        on_hotkey('alt shift', COMMA, self.pin_to_prev)
+        on_hotkey('alt', PERIOD, self.switch_to_next)
+        on_hotkey('alt shift', PERIOD, self.pin_to_next)
+        # directly switch hotkeys
+        for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
+            on_hotkey('alt', ch, self.switch_to_index, args=(i,))
+            on_hotkey('alt shift', ch, self.pin_to_index, args=(i,))
 
         self.timer = QTimer()
         self.timer.timeout.connect(self.update)
+        self.active = False
+        self.wnds = RendableWindows(self)
 
-    def switch_to_index(self, idx):
-        logger.debug('switch to {} [1..)'.format(idx + 1))
-        self.wnds.update()
-        idx = min(idx, len(self.wnds) - 1)
-        self.wnds[idx].activate()
+    def switch_to_index(self, i):
+        logger.debug('switch to {} [1..)'.format(i + 1))
+        wnds = self.wnds
+        wnds.update()
+        if i < 0 or i >= len(wnds) or not wnds[i]:
+            logger.info('switch failed, index {} has no window'.format(i))
+            return False
+        wnds[i].activate()
+        return True
 
     def switch_to_index_and_hide(self, idx):
         logger.debug('switch_to_index_and_hide', idx)
         self.switch_to_index(idx)
         self.hide()
 
-    def switch_to_last(self):
-        logger.debug('switch to last')
-        self.wnds.update()
-        self.wnds[-1].activate()
-
     def switch_to_prev(self):
-        logger.debug('switch prev')
-        self.wnds.update()
-        self.wnds.prev.activate()
+        logger.info('switch prev')
+        wnds = self.wnds
+        wnds.update()
+        if wnds.has_current:
+            wnds.prev.activate()
 
     def switch_to_next(self):
-        logger.debug('switch next')
-        self.wnds.update()
-        self.wnds.next.activate()
+        logger.info('switch next')
+        wnds = self.wnds
+        wnds.update()
+        if wnds.has_current:
+            wnds.next.activate()
 
     def pin_to_index(self, idx):
-        self.wnds.update()
         wnds = self.wnds
-        if not 0 <= idx < len(wnds):
+        if not wnds.has_current:
+            logger.warning('try to pin without current')
             return False
-        i, j = wnds.current_index, idx
-        logger.info('pin to {} (original {})'.format(j, i))
-        wnds[i], wnds[j] = wnds[j], wnds[i]
-        self.wnds.update()
-        return True
-
-    def pin_to_last(self):
-        logger.info('pin to last')
-        self.pin_to_index(len(self.wnds) - 1)
+        logger.info('{} pin to {}'.format(wnds.current.index, idx))
+        wnds.update()
+        r = wnds.current.pin_to(idx)
+        wnds.update()
+        return r
 
     def pin_to_prev(self):
         logger.info('pin to prev')
@@ -157,64 +138,41 @@ class Widget(QDialog):
         wnds = self.wnds
         self.pin_to_index(wnds.index(wnds.next))
 
-    def register_hotkey(self, ch, callback, args=None,
-                        ctrl=False, alt=False, shift=False,
-                        mod=0):
+    def on_hotkey(self, modifiers, ch, callback, args=(), ephemeral=False):
         """Register <modifiers>-<key> with callback
 
-        At least one of Ctrl/Alt/Shift must be present,
-        if all are unspecified, Ctrl-Alt-<key> will be used
+        At least one of Ctrl/Alt/Shift must be present.
+
+        Args:
+            modifiers - a `str` to specify modifiers
+                e.g. 'alt' / 'alt shift' / 'ctrl alt'
         """
+        modifiers = modifiers.lower().split()
+        alt = 'alt' in modifiers
+        ctrl = 'ctrl' in modifiers
+        shift = 'shift' in modifiers
         if not ctrl and not alt and not shift:
-            ctrl = alt = True
+            raise TypeError('At least one of Ctrl/Alt/Shift must be present.')
         ctrl = win32con.MOD_CONTROL if ctrl else 0
         shift = win32con.MOD_SHIFT if shift else 0
         alt = win32con.MOD_ALT if alt else 0
 
         key = ord(ch)
-        logger.info('register {} (0x{:02x})'.format(ch, key))
+        logger.info('registering {}-{} (0x{:02x})'.format(
+            '-'.join(modifiers), ch, key))
         id = len(self._hotkey_handlers)
         if args is None:
             args = (ch,)
         self._hotkey_handlers[id] = (callback, args)
         hwnd = self.winId()
-        modifiers = ctrl | alt | shift | mod
+        modifiers = ctrl | alt | shift
         win32gui.RegisterHotKey(
             hwnd, id, modifiers, key)
+        if ephemeral:
+            self._hotkey_ids_when_active.append(id)
         return id
 
-    def on_hotkey_when_active(self, ch):
-        print 'on_hotkey_when_active', ch
-        idx = HOTKEYS_WHEN_ACTIVE_INDEXES.get(ch, None)
-        if idx is not None:
-            self.switch_to_index_and_hide(idx)
-            return
-        if ch == ',':
-            self.wnds.prev.activate()
-            self.update()
-            return
-        if ch == '.':
-            self.wnds.next.activate()
-            self.update()
-            return
-        if ch.startswith('pin'):
-            ch = ch[-1]
-            idx = HOTKEYS_WHEN_ACTIVE_INDEXES.get(ch, None)
-            if idx is not None:
-                print 'pin to {} ({})'.format(ch, idx)
-                self.pin_to_index(idx)
-                self.update()
-                return
-            if ch == ',':
-                self.wnds.prev.activate()
-                self.update()
-                return
-            if ch == '.':
-                self.wnds.next.activate()
-                self.update()
-                return
-
-    def on_activate(self, _):
+    def on_activate(self):
         self.activate()
 
     def activate(self):
@@ -224,18 +182,14 @@ class Widget(QDialog):
         self.active = True
         self.wnds.update()
         self.timer.start(100)
-
-        self._hotkey_ids_when_active = []
-        for i, (ch, arg) in enumerate(HOTKEYS_WHEN_ACTIVE.items()):
-            if not isinstance(ch, str):
-                ch = chr(ch)
-            id = self.register_hotkey(ch, self.on_hotkey_when_active,
-                                      args=(arg,), ctrl=True, alt=True)
-            self._hotkey_ids_when_active.append(id)
-            id = self.register_hotkey(ch, self.on_hotkey_when_active,
-                                      args=('pin ' + arg,),
-                                      ctrl=True, alt=True, shift=True)
-            self._hotkey_ids_when_active.append(id)
+        on_hotkey = self.on_hotkey
+        # directly switch hotkeys
+        for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
+            on_hotkey('ctrl alt', ch, self.switch_to_index, args=(i,),
+                      ephemeral=True)
+        # panel switch to prev/next
+        on_hotkey('ctrl alt', COMMA, self.switch_to_prev, ephemeral=True)
+        on_hotkey('ctrl alt', PERIOD, self.switch_to_next, ephemeral=True)
         self.show_panel()
 
     def show_panel(self):
@@ -249,7 +203,7 @@ class Widget(QDialog):
             self.resize(width, height)
             self.show()
 
-    def on_deactivate(self, _):
+    def on_deactivate(self):
         self.deactivate()
         self.wnds.update()
 
@@ -311,13 +265,9 @@ class Widget(QDialog):
             n_rows, n_cols, horz_gap, vert_gap)
         # actual metrics
         rc_thumbs = [lt['rc_thumb'] for lt in layouts]
-        item_width = max(rc.width() for rc in rc_thumbs)
         item_height = max(rc.height() for rc in rc_thumbs)
-        horz_save = board_width - (item_width + horz_gap) * n_cols - horz_gap
         vert_save = board_height - (item_height + vert_gap) * n_rows - vert_gap
-        left_margin += horz_save / 2.0
         top_margin += vert_save / 2.0
-        right_margin += horz_save / 2.0
         old_bottom_margin = bottom_margin
         bottom_margin += vert_save / 2.0
         # actual layout
@@ -325,18 +275,19 @@ class Widget(QDialog):
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
         # painting
-        for lt in layouts:
+        for i, lt in enumerate(layouts):
             wnd = lt['wnd']
             row = lt['row']
             rc_item = lt['rc_item']
             rc_thumb = lt['rc_thumb']
             if wnd:
                 wnd.render(rc_thumb)
-            if wnd:
-                draw_title(painter, wnd, rc_item,
-                           baselines[row] + fm.lineSpacing())
-            else:
+            if not wnd:
                 draw_dummy_window(painter, rc_item)
+            # dummy also draw title inorder to have marker
+            draw_title(painter, wnd, rc_item,
+                       baseline=baselines[row] + fm.lineSpacing(),
+                       res=self.res)
         rc_bottom = QRect(0, canvas_height - old_bottom_margin,
                           canvas_width, old_bottom_margin)
         draw_datetime(painter, rc_bottom)
@@ -383,7 +334,7 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
 def draw_dummy_window(painter, rc):
     painter.save()
     font = painter.font()
-    font.setPixelSize(30)
+    font.setPixelSize(rc.height() * 0.25)
     painter.setFont(font)
     pen = painter.pen()
     color = QColor('#fff')
@@ -393,21 +344,37 @@ def draw_dummy_window(painter, rc):
     painter.drawText(rc, Qt.AlignCenter, 'Available')
     painter.restore()
 
-def draw_datetime(painter, rc):
-    painter.save()
-    font = painter.font()
-    font.setPixelSize(30)
-    painter.setFont(font)
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    painter.drawText(rc, Qt.AlignCenter, now)
-    painter.restore()
-
-def draw_title(painter, wnd, rc_item, baseline):
+def draw_title(painter, wnd, rc, baseline, res):
     fm = painter.fontMetrics()
-    marker_width = fm.boundingRect(u'【U】').width()
-    title_width = rc_item.width() - marker_width
+    i = wnd.index
+    if i < 18:
+        ch = DIRECT_SWITCH_HOTKEY_NAMES[i]
+    else:
+        ch = ''
+    title_width = rc.width()
+    marker = u'({})'.format(ch) if ch else ''
+    marker_width = max(fm.boundingRect(marker).width(), 15)
+    marker_gap = 10
+    title_width -= marker_width + marker_gap
+    marker_height = fm.lineSpacing()
+    rc_marker = QRect(rc.left(), baseline + 3 - marker_height,
+                      marker_width, marker_height)
+    if wnd.pinned:
+        pin_icon_width = res.pin_icon.width()
+        pin_icon_gap = 5
+        title_width -= pin_icon_width + pin_icon_gap
+        x = rc.right() - res.pin_icon.width()
+        y = baseline - fm.strikeOutPos() - res.pin_icon.height() / 2
+        painter.drawPixmap(x, y, res.pin_icon)
+    # draw marker
+    painter.save()
+    pen = painter.pen()
+    painter.setPen(pen)
+    painter.drawText(rc_marker, Qt.AlignCenter, marker)
+    painter.restore()
+    # draw title
     title = fm.elidedText(wnd.title, Qt.ElideRight, title_width)
-    x = rc_item.left() + marker_width
+    x = rc_marker.right() + marker_gap
     if wnd.current:
         painter.save()
         pen = painter.pen()
@@ -417,6 +384,15 @@ def draw_title(painter, wnd, rc_item, baseline):
         painter.restore()
     else:
         painter.drawText(x, baseline, title)
+
+def draw_datetime(painter, rc):
+    painter.save()
+    font = painter.font()
+    font.setPixelSize(30)
+    painter.setFont(font)
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    painter.drawText(rc, Qt.AlignCenter, now)
+    painter.restore()
 
 def get_rowcols(wnds):
     n = len(wnds)
