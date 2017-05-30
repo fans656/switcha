@@ -1,5 +1,7 @@
 import locale
 import logging
+import ctypes
+from ctypes import windll
 from functools import partial
 
 import win32gui
@@ -89,7 +91,10 @@ class Window(object):
     @property
     def title(self):
         lang, encoding = locale.getdefaultlocale()
-        return win32gui.GetWindowText(self.hwnd).decode(encoding)
+        n = 512
+        buf = ctypes.create_unicode_buffer(n)
+        windll.user32.GetWindowTextW(self.hwnd, buf, n)
+        return buf.value
 
     @property
     def current(self):
@@ -274,4 +279,6 @@ class RendableWindows(Windows):
         assert all(w.wnds for w in self.wnds)
 
 if __name__ == '__main__':
-    pass
+    wnds = Windows()
+    for wnd in wnds:
+        print wnd.hwnd, repr(wnd.title)
