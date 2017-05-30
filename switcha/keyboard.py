@@ -181,6 +181,7 @@ ALIASES = {
     'ALT': 'MENU',
     'LALT': 'LMENU',
     'RALT': 'RMENU',
+    'CAPS': 'CAPITAL',
 }
 NAME2VK = {name[3:]: getattr(win32con, name) for name in dir(win32con)
            if name.startswith('VK_')}
@@ -230,6 +231,5 @@ if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     #logger.setLevel(logging.INFO)
     kbd = Keyboard()
-    for ch in ';,./':
-        seq = kbd.on(ch, id)
+    kbd.on('alt caps', lambda: 0)
     kbd.run()

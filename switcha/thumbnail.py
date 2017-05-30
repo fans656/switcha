@@ -83,9 +83,9 @@ class Thumbnail(object):
         '''
         thumbprop = ThumbProp()
         thumbprop.dwFlags = (
-            DWM_TNP_RECTDESTINATION |
-            DWM_TNP_VISIBLE |
-            DWM_TNP_SOURCECLIENTAREAONLY
+            DWM_TNP_RECTDESTINATION
+            | DWM_TNP_VISIBLE
+            #| DWM_TNP_SOURCECLIENTAREAONLY
         )
         if rc is None:
             rc = self.dst.rect()
@@ -95,6 +95,6 @@ class Thumbnail(object):
         thumbprop.rcDestination.bottom = rc.bottom()
         thumbprop.fSourceClientAreaOnly = 0
         thumbprop.fVisible = 1
-        thumbprop.fSourceClientAreaOnly = 1
+        #thumbprop.fSourceClientAreaOnly = 1
         dwmapi.DwmUpdateThumbnailProperties(
             self.thumbnail, ctypes.byref(thumbprop))

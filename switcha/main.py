@@ -1,13 +1,45 @@
 # coding: utf8
 '''
+Keys:
+    Alt-U       Switch to 1st window without panel
+    Alt-I       Switch to 2nd window without panel
+    Alt-O       Switch to 3rd window without panel
+    Alt-P       Switch to 4th window without panel
+    Alt-J       Switch to 5th window without panel
+    Alt-K       Switch to 6th window without panel
+    Alt-L       Switch to 7th window without panel
+    Alt-;       Switch to 8th window without panel
+
+    Alt-1       Switch to  9th window without panel
+    Alt-2       Switch to 10th window without panel
+    Alt-3       Switch to 11th window without panel
+    Alt-4       Switch to 12th window without panel
+    Alt-5       Switch to 13th window without panel
+    Alt-6       Switch to 14th window without panel
+    Alt-7       Switch to 15th window without panel
+    Alt-8       Switch to 16th window without panel
+    Alt-9       Switch to 17th window without panel
+    Alt-0       Switch to 18th window without panel
+
+    Ctrl-Alt-<key>   Switch to the <key> window with panel
+    Alt-Shift-<key>  Pin to <key> window
+
+    Alt-,       Switch to prev without panel
+    Alt-.       Switch to prev without panel
+
+    Ctrl-Alt-D  Switch to prev with panel
+    Ctrl-Alt-F  Switch to next with panel
+
 Bugs:
-    ) thumb flash between frameless & framed
+    !!) thumb flash between frameless & framed
 
 Todos:
-    ) memorized pin (window title? executable path?)
+    ) workspace
     ) similar window replace previous closed slot (chrome)
+    ) memorized pin (window title? executable path?)
     ) custom regex slot rule (chrome, vim)
-
+    .) detect window open/close (Lingoes Ctrl-Alt-E)
+    .) GUI key config (conflicts resolution and other settings)
     ..) window thumbnail image data
 '''
 import logging
@@ -17,6 +49,8 @@ from collections import OrderedDict
 
 import win32gui
 import win32con
+import pywintypes
+from f6 import each
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
@@ -26,7 +60,7 @@ import config
 
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
-#logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
 #logging.getLogger('keyboard').setLevel(logging.INFO)
 #logging.getLogger('window').setLevel(logging.DEBUG)
@@ -36,6 +70,8 @@ SEMICOLON = chr(0xba)
 PERIOD = chr(0xbe)
 COMMA = chr(0xbc)
 SLASH = chr(0xbf)
+TAB = chr(win32con.VK_TAB)
+CAPS = chr(win32con.VK_CAPITAL)
 
 # 18 directly switch hotkeys
 # e.g. Alt-U => 1st, Alt-I => 2nd, ..., Alt-1 => 9th, Alt-0 => 18th
@@ -64,16 +100,19 @@ class Widget(QDialog):
         self.res = Res()
 
         self.kbd = kbd = Keyboard()
-        # ctrl alt to invoke panel
+        self._hotkey_handlers = {}
+        self._hotkey_ids_when_active = []
+        on_hotkey = self.on_hotkey
+
+        # ctrl alt to for panel
         kbd.on('ctrl alt', self.on_activate)
         kbd.on('alt ctrl', self.on_activate)
         kbd.on('ctrl alt^', self.on_deactivate)
         kbd.on('alt ctrl^', self.on_deactivate)
+        # right alt for seeing time with one hand
+        kbd.on('ralt', self.on_activate)
+        kbd.on('ralt^', self.on_deactivate)
 
-        self._hotkey_handlers = {}
-        self._hotkey_ids_when_active = []
-
-        on_hotkey = self.on_hotkey
         # switch/pin to prev/next
         on_hotkey('alt', COMMA, self.switch_to_prev)
         on_hotkey('alt shift', COMMA, self.pin_to_prev)
@@ -84,8 +123,9 @@ class Widget(QDialog):
             on_hotkey('alt', ch, self.switch_to_index, args=(i,))
             on_hotkey('alt shift', ch, self.pin_to_index, args=(i,))
 
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update)
+        self.datetime_timer = QTimer()
+        self.datetime_timer.timeout.connect(self.update)
+
         self.active = False
         self.wnds = RendableWindows(self)
 
@@ -110,6 +150,7 @@ class Widget(QDialog):
         wnds.update()
         if wnds.has_current:
             wnds.prev.activate()
+        self.update()
 
     def switch_to_next(self):
         logger.info('switch next')
@@ -117,6 +158,7 @@ class Widget(QDialog):
         wnds.update()
         if wnds.has_current:
             wnds.next.activate()
+        self.update()
 
     def pin_to_index(self, idx):
         wnds = self.wnds
@@ -127,6 +169,7 @@ class Widget(QDialog):
         wnds.update()
         r = wnds.current.pin_to(idx)
         wnds.update()
+        self.update()
         return r
 
     def pin_to_prev(self):
@@ -182,15 +225,17 @@ class Widget(QDialog):
         logger.info('activate')
         self.active = True
         self.wnds.update()
-        self.timer.start(100)
+        self.datetime_timer.start(100)
         on_hotkey = self.on_hotkey
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
             on_hotkey('ctrl alt', ch, self.switch_to_index, args=(i,),
                       ephemeral=True)
         # panel switch to prev/next
-        on_hotkey('ctrl alt', COMMA, self.switch_to_prev, ephemeral=True)
-        on_hotkey('ctrl alt', PERIOD, self.switch_to_next, ephemeral=True)
+        on_hotkey('ctrl alt', 'F', self.switch_to_next, ephemeral=True)
+        on_hotkey('ctrl alt', 'D', self.switch_to_prev, ephemeral=True)
+        #on_hotkey('ctrl alt', COMMA, self.switch_to_prev, ephemeral=True)
+        #on_hotkey('ctrl alt', PERIOD, self.switch_to_next, ephemeral=True)
         self.show_panel()
 
     def show_panel(self):
@@ -213,7 +258,7 @@ class Widget(QDialog):
             return
         logger.info('deactivate')
         self.active = False
-        self.timer.stop()
+        self.datetime_timer.stop()
         hwnd = self.winId()
         for id in self._hotkey_ids_when_active:
             windll.user32.UnregisterHotKey(int(hwnd), id)
@@ -261,18 +306,17 @@ class Widget(QDialog):
         item_width = (board_width - (n_cols - 1) * horz_gap) / float(n_cols)
         item_height = (board_height - (n_rows - 1) * vert_gap) / float(n_rows)
         # probe layout
-        layouts, baselines = do_layout(
+        layouts = do_layout(
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
         # actual metrics
-        rc_thumbs = [lt['rc_thumb'] for lt in layouts]
-        item_height = max(rc.height() for rc in rc_thumbs)
+        item_height = max(lt['rc_thumb'].height() for lt in layouts)
         vert_save = board_height - (item_height + vert_gap) * n_rows - vert_gap
         top_margin += vert_save / 2.0
         old_bottom_margin = bottom_margin
         bottom_margin += vert_save / 2.0
         # actual layout
-        layouts, baselines = do_layout(
+        layouts = do_layout(
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
         # painting
@@ -283,12 +327,8 @@ class Widget(QDialog):
             rc_thumb = lt['rc_thumb']
             if wnd:
                 wnd.render(rc_thumb)
-            if not wnd:
-                draw_dummy_window(painter, rc_item)
             # dummy also draw title inorder to have marker
-            draw_title(painter, wnd, rc_item,
-                       baseline=baselines[row] + fm.lineSpacing(),
-                       res=self.res)
+            draw_title(painter, lt, res=self.res)
         rc_bottom = QRect(0, canvas_height - old_bottom_margin,
                           canvas_width, old_bottom_margin)
         draw_datetime(painter, rc_bottom)
@@ -296,10 +336,8 @@ class Widget(QDialog):
 def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
               horz_gap, vert_gap):
     layouts = []
-    baselines = {}
     item_wh_ratio = item_width / float(item_height)
     for row in xrange(n_rows):
-        baseline = 0
         for col in xrange(n_cols):
             i_wnd = row * n_cols + col
             if i_wnd == len(wnds):
@@ -321,61 +359,80 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
                 rc_thumb = QRect(x + x_offset, y + y_offset,
                                  thumb_width, thumb_height)
             else:
-                rc_thumb = rc_item
-            baseline = max(baseline, rc_thumb.bottom())
+                rc_thumb = QRect()
             layouts.append({
                 'wnd': wnd,
                 'row': row,
+                'col': col,
                 'rc_item': rc_item,
                 'rc_thumb': rc_thumb,
             })
-        baselines[row] = baseline
-    return layouts, baselines
+    rc_thumbs = [lt['rc_thumb'] for lt in layouts]
+    max_thumb_height = max(rc.height() for rc in rc_thumbs)
+    dummy_thumb_margin = (rc_item.height() - max_thumb_height) / 2.0
+    for lt in layouts:
+        wnd = lt['wnd']
+        rc_item = lt['rc_item']
+        if not wnd:
+            lt['rc_thumb'] = rc_item.adjusted(0, dummy_thumb_margin,
+                                              0, -dummy_thumb_margin)
+    # row metrics
+    for row in xrange(n_rows):
+        i = row * n_cols
+        lts = layouts[i:i+n_cols]
+        rc_thumbs = list(each(lts)['rc_thumb'])
+        each(lts)['min_thumb_top'] = min(rc.top() for rc in rc_thumbs)
+        each(lts)['max_thumb_bottom'] = max(rc.bottom() for rc in rc_thumbs)
+    return layouts
 
-def draw_dummy_window(painter, rc):
+def draw_dummy_thumb(painter, layout, ch):
+    rc_item = layout['rc_item']
     painter.save()
     font = painter.font()
-    font.setPixelSize(min(rc.height() * 0.25, 30))
+    font.setPixelSize(min(rc_item.height() * 0.25, 30))
     painter.setFont(font)
     pen = painter.pen()
     color = QColor('#fff')
     color.setAlpha(25)
     pen.setColor(color)
     painter.setPen(pen)
-    painter.drawText(rc, Qt.AlignCenter, 'Available')
+    painter.drawText(rc_item, Qt.AlignCenter, '({}) Available'.format(ch))
     painter.restore()
 
-def draw_title(painter, wnd, rc, baseline, res):
+def draw_title(painter, layout, res):
+    wnd = layout['wnd']
+    rc_item = layout['rc_item']
+    max_thumb_bottom = layout['max_thumb_bottom']
     fm = painter.fontMetrics()
     i = wnd.index
     if i < 18:
         ch = DIRECT_SWITCH_HOTKEY_NAMES[i]
     else:
         ch = ''
-    title_width = rc.width()
+    title_width = rc_item.width()
     marker = u'({})'.format(ch) if ch else ''
     marker_width = max(fm.boundingRect(marker).width(), 15)
     marker_gap = 10
     title_width -= marker_width + marker_gap
     marker_height = fm.lineSpacing()
-    rc_marker = QRect(rc.left(), baseline + 3 - marker_height,
+    baseline = max_thumb_bottom + fm.lineSpacing()
+    rc_item_marker = QRect(rc_item.left(), baseline + 3 - marker_height,
                       marker_width, marker_height)
     if wnd.pinned:
         pin_icon_width = res.pin_icon.width()
         pin_icon_gap = 5
         title_width -= pin_icon_width + pin_icon_gap
-        x = rc.right() - res.pin_icon.width()
+        x = rc_item.right() - res.pin_icon.width()
         y = baseline - fm.strikeOutPos() - res.pin_icon.height() / 2
         painter.drawPixmap(x, y, res.pin_icon)
     # draw marker
-    painter.save()
-    pen = painter.pen()
-    painter.setPen(pen)
-    painter.drawText(rc_marker, Qt.AlignCenter, marker)
-    painter.restore()
+    if wnd:
+        painter.drawText(rc_item_marker, Qt.AlignCenter, marker)
+    else:
+        draw_dummy_thumb(painter, layout, ch)
     # draw title
     title = fm.elidedText(wnd.title, Qt.ElideRight, title_width)
-    x = rc_marker.right() + marker_gap
+    x = rc_item_marker.right() + marker_gap
     if wnd.current:
         painter.save()
         pen = painter.pen()

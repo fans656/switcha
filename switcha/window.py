@@ -11,7 +11,12 @@ try:
 except ImportError:
     pass
 
-__all__ = ['enum_windows', 'Windodws', 'RendableWindows']
+__all__ = [
+    'enum_windows',
+    'get_alt_tab_target',
+    'Windodws',
+    'RendableWindows',
+]
 
 Normal = 0
 Switched = 1
@@ -33,6 +38,10 @@ def get_windows(wnds=None):
     wnds = [Window(hwnd, wnds=wnds) for hwnd in alt_tab_windows()]
     wnds = filter(lambda w: w.title != 'Program Manager', wnds)
     return wnds
+
+def get_alt_tab_target():
+    wnds = get_windows()
+    return wnds[1] if wnds else None
 
 def is_alt_tab_window(hwnd):
     if not win32gui.IsWindowVisible(hwnd):
@@ -111,9 +120,9 @@ class Window(object):
 class RendableWindow(Window):
 
     def __init__(self, hwnd, target, *args, **kwds):
-        assert 'wnds' in kwds
         super(RendableWindow, self).__init__(hwnd, *args, **kwds)
         self.thumb = Thumbnail(target, hwnd)
+        assert hasattr(self, 'hwnd')
 
     def render(self, rc):
         self.thumb.render(rc)
@@ -186,7 +195,7 @@ class Windows(object):
 
     @property
     def current_index(self):
-        return
+        return next((i for i, w in enumerate(self.wnds) if w.current), -1)
 
     @property
     def current(self):
@@ -213,6 +222,10 @@ class Windows(object):
             wnd = self[i]
             if wnd:
                 return wnd
+
+    @property
+    def alt_tab_target(self):
+        return get_alt_tab_target()
 
     def index(self, wnd):
         return self.wnds.index(wnd)
@@ -259,3 +272,6 @@ class RendableWindows(Windows):
                 continue
             wnds[i] = RendableWindow(wnd.hwnd, self.target, wnds=self)
         assert all(w.wnds for w in self.wnds)
+
+if __name__ == '__main__':
+    pass
