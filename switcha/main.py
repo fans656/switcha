@@ -285,6 +285,7 @@ class Widget(QDialog):
 
     def paintEvent(self, ev):
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
         fm = painter.fontMetrics()
         wnds = self.wnds
         n_rows, n_cols = get_rowcols(wnds)
@@ -349,9 +350,9 @@ class Widget(QDialog):
                 painter.restore()
             # dummy also draw title inorder to have marker
             draw_title(painter, lt, res=self.res)
-        rc_bottom = QRect(0, canvas_height - old_bottom_margin,
-                          canvas_width, old_bottom_margin)
-        draw_datetime(painter, rc_bottom)
+        #rc_bottom = QRect(0, canvas_height - old_bottom_margin,
+        #                  canvas_width, old_bottom_margin)
+        draw_datetime(painter, self.rect())
 
 def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
               horz_gap, vert_gap):
@@ -472,34 +473,33 @@ def draw_title(painter, layout, res):
     #    painter.drawText(x, baseline, title)
     painter.drawText(x, baseline, title)
 
-def draw_datetime(painter, rc):
+def draw_datetime(painter, rc_canvas):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     painter.save()
 
     font = painter.font()
-    font.setPixelSize(30)
+    size = config.DATETIME_FONT_PIXEL_SIZE
+    font.setPixelSize(size)
     font.setWeight(QFont.Black)
-    painter.setFont(font)
 
-    fm = painter.fontMetrics()
-    rc.translate(-fm.lineSpacing(), 0)
-    #rc.setLeft(rc.right() - 350)
-    #rc.setBottom(rc.bottom() - 50)
+    fm = QFontMetrics(font)
+    bbox = fm.boundingRect(now)
+    width, height = bbox.width(), bbox.height()
+    width -= width % size + (size if width % size else 0)
+    x = rc_canvas.width() * config.DATETIME_HORZ_POS_RATIO - width / 2.0
+    rc_text = QRect(x, rc_canvas.bottom() - height, width, height)
+    d = fm.lineSpacing() * config.DATETIME_VERT_MARGIN_LINESPACING_RATIO
+    rc_text.translate(0, -d)
 
-    #color = QColor('#000')
-    #color.setAlpha(50)
-    #painter.fillRect(rc, color)
+    path = QPainterPath()
+    path.addText(rc_text.left(), rc_text.bottom(), font, now)
 
     pen = painter.pen()
-    pen.setColor(QColor('#000'))
+    pen.setColor(QColor(config.DATETIME_OUTLINE_COLOR))
     painter.setPen(pen)
-    painter.drawText(rc, Qt.AlignCenter | Qt.AlignRight, now)
 
-    rc.translate(-1, -1)
-    pen = painter.pen()
-    pen.setColor(QColor('#eee'))
-    painter.setPen(pen)
-    painter.drawText(rc, Qt.AlignCenter | Qt.AlignRight, now)
+    painter.fillPath(path, QColor(config.DATETIME_COLOR))
+    painter.drawPath(path)
 
     painter.restore()
 
