@@ -33,6 +33,8 @@ Keys:
 Bugs:
     !) on windows 10, sometimes background will lose transparency,
        thus become totally black
+    !) after sleep/resume, will show non-taskbar windows
+       such as 'Store', 'Photos', '设置'
     ) when there is only 1 window, thumbnail appears too large
     ) when no activate window, ctrl-d/f should go to e.g. 1st window.
       ease use for one hand.
@@ -67,9 +69,9 @@ import config
 
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
-logging.getLogger('keyboard').setLevel(logging.INFO)
+#logging.getLogger('keyboard').setLevel(logging.INFO)
 #logging.getLogger('window').setLevel(logging.DEBUG)
 
 # https://msdn.microsoft.com/en-us/library/windows/desktop/dd375731(v=vs.85).aspx
@@ -137,7 +139,7 @@ class Widget(QDialog):
         self.wnds = RendableWindows(self)
 
     def switch_to_index(self, i):
-        logger.debug('switch to {} [1..)'.format(i + 1))
+        logger.info('switch to {} (1 based)'.format(i + 1))
         wnds = self.wnds
         wnds.update()
         if i < 0 or i >= len(wnds) or not wnds[i]:
@@ -284,11 +286,12 @@ class Widget(QDialog):
         return False, 0
 
     def paintEvent(self, ev):
+        wnds = self.wnds
+        n_rows, n_cols = get_rowcols(wnds)
+
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         fm = painter.fontMetrics()
-        wnds = self.wnds
-        n_rows, n_cols = get_rowcols(wnds)
         # white pen
         color = QColor(config.TITLE_COLOR)
         pen = painter.pen()
@@ -306,10 +309,11 @@ class Widget(QDialog):
         slot_width = board_width / float(n_cols)
         slot_height = board_height / float(n_rows)
         horz_gap = max(slot_width * config.HORZ_GAP_RATIO, 1)
-        vert_gap = max(slot_width * config.VERT_GAP_RATIO, fm.lineSpacing())
+        vert_gap = max(slot_width * config.VERT_GAP_RATIO,
+                       fm.lineSpacing() * config.VERT_GAP_N_LINESPACING)
         item_width = (board_width - (n_cols - 1) * horz_gap) / float(n_cols)
         item_height = (board_height - (n_rows - 1) * vert_gap) / float(n_rows)
-        # probe layout
+        # probing layout
         layouts, rc_bounding = do_layout(
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
@@ -324,34 +328,27 @@ class Widget(QDialog):
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
         # draw darken back
-        color = QColor(config.BACK_COLOR)
-        color.setAlpha(int(255 * (max(0.0, min(config.DARKEN_RATIO, 1.0)))))
         d = fm.lineSpacing() * 2
         rc_back = rc_bounding.adjusted(-d, -d, d, 1.5 * d)
+        color = QColor(config.BACK_COLOR)
+        color.setAlpha(int(255 * (max(0.0, min(config.DARKEN_RATIO, 1.0)))))
         painter.fillRect(rc_back, color)
-        # painting
+        # draw windows
         for i, lt in enumerate(layouts):
             wnd = lt['wnd']
             row = lt['row']
             rc_item = lt['rc_item']
+            rc_item.adjust(0, 0, 0, fm.lineSpacing() * 2)  # for title area
             rc_thumb = lt['rc_thumb']
+            wnd.ch = (DIRECT_SWITCH_HOTKEY_NAMES[wnd.index]
+                      if wnd.index < 18 else '')
+            if wnd and wnd.current:
+                draw_active_border(painter, rc_item)
             if wnd:
                 wnd.render(rc_thumb)
-            rc_icon = QRect(rc_item.left(), rc_item.top(), 32, 32)
-            #wnd.draw_icon(self, rc_icon)
-            if wnd.current:
-                painter.save()
-                pen = painter.pen()
-                pen.setWidth(3)
-                painter.setPen(pen)
-                d = fm.lineSpacing() * 0.6
-                rc_border = rc_item.adjusted(-d, -d, d, 2 * d)
-                painter.drawRect(rc_border)
-                painter.restore()
-            # dummy also draw title inorder to have marker
-            draw_title(painter, lt, res=self.res)
-        #rc_bottom = QRect(0, canvas_height - old_bottom_margin,
-        #                  canvas_width, old_bottom_margin)
+                draw_title(painter, lt, res=self.res)
+            else:
+                draw_dummy_thumb(painter, lt)
         draw_datetime(painter, self.rect())
 
 def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
@@ -413,15 +410,16 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
     rc_bounding = QRect(left, top, right - left, bottom - top)
     return layouts, rc_bounding
 
-def draw_dummy_thumb(painter, layout, ch):
+def draw_dummy_thumb(painter, layout):
     rc_item = layout['rc_item']
+    ch = layout['wnd'].ch
     painter.save()
     font = painter.font()
     font.setPixelSize(min(rc_item.height() * 0.25, 30))
     painter.setFont(font)
     pen = painter.pen()
     color = QColor('#fff')
-    color.setAlpha(25)
+    color.setAlpha(50)
     pen.setColor(color)
     painter.setPen(pen)
     painter.drawText(rc_item, Qt.AlignCenter, '({}) Available'.format(ch))
@@ -431,47 +429,60 @@ def draw_title(painter, layout, res):
     wnd = layout['wnd']
     rc_item = layout['rc_item']
     max_thumb_bottom = layout['max_thumb_bottom']
+    ch = wnd.ch
+    rc = QRect(rc_item)
+    rc.setTop(max_thumb_bottom)
     fm = painter.fontMetrics()
-    i = wnd.index
-    if i < 18:
-        ch = DIRECT_SWITCH_HOTKEY_NAMES[i]
-    else:
-        ch = ''
-    title_width = rc_item.width()
-    marker = u'({})'.format(ch) if ch else ''
-    marker_width = max(fm.boundingRect(marker).width(), 15)
-    marker_gap = 10
-    title_width -= marker_width + marker_gap
-    marker_height = fm.lineSpacing()
-    baseline = max_thumb_bottom + fm.lineSpacing()
-    rc = rc_item.adjusted(0, 0, 0, fm.lineSpacing())
-    rc_item_marker = QRect(rc_item.left(), baseline + 3 - marker_height,
-                      marker_width, marker_height)
+
+    # draw marker (hotkey)
+    painter.save()
+    font = painter.font()
+    font.setWeight(QFont.Black)
+    painter.setFont(font)
+    pen = painter.pen()
+    pen.setColor(QColor('#555'))
+    painter.setPen(pen)
+    marker_width = fm.boundingRect('X').width()
+    marker = ch
+    if marker:
+        painter.drawText(rc, Qt.AlignRight | Qt.AlignVCenter, marker)
+        rc.adjust(0, 0, -(marker_width + 5), 0)
+    painter.restore()
+
+    # draw program icon
+    painter.save()
+    d = 2 * fm.lineSpacing()
+    t = 5
+    rc_icon = QRect(rc.left(), rc.top(), d, d).adjusted(t,t,-t,-t)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform)
+    painter.drawPixmap(rc_icon, wnd.icon)
+    rc.setLeft(rc_icon.right() + d * 0.2)
+    painter.restore()
+
+    # draw pin icon
     if wnd.pinned:
-        pin_icon_width = res.pin_icon.width()
-        pin_icon_gap = 5
-        title_width -= pin_icon_width + pin_icon_gap
-        x = rc_item.right() - res.pin_icon.width()
-        y = baseline - fm.strikeOutPos() - res.pin_icon.height() / 2
-        painter.drawPixmap(x, y, res.pin_icon)
-    # draw marker
-    if wnd:
-        painter.drawText(rc_item_marker, Qt.AlignCenter, marker)
-    else:
-        draw_dummy_thumb(painter, layout, ch)
+        icon = res.pin_icon
+        w, h = icon.width(), icon.height()
+        x = rc.right() - w
+        y = (rc.top() + rc.bottom()) / 2.0 - h / 2.0
+        rc_pin = QRect(x, y, w, h)
+        painter.drawPixmap(rc_pin, res.pin_icon)
+        rc.adjust(0, 0, -w, 0)
+
     # draw title
-    title = fm.elidedText(wnd.title, Qt.ElideRight, title_width)
-    x = rc_item_marker.right() + marker_gap
-    #if wnd.current:
-    #    painter.save()
-    #    pen = painter.pen()
-    #    pen.setColor(QColor(config.ACTIVE_TITLE_COLOR))
-    #    painter.setPen(pen)
-    #    painter.drawText(x, baseline, title)
-    #    painter.restore()
-    #else:
-    #    painter.drawText(x, baseline, title)
-    painter.drawText(x, baseline, title)
+    title = fm.elidedText(wnd.title, Qt.ElideRight, rc.width())
+    painter.drawText(rc, Qt.AlignLeft | Qt.AlignVCenter, title)
+
+def draw_active_border(painter, rc_item):
+    fm = painter.fontMetrics()
+    painter.save()
+    pen = painter.pen()
+    pen.setWidth(3)
+    painter.setPen(pen)
+    d = fm.lineSpacing() * 0.4
+    rc_border = rc_item.adjusted(-d, -d, d, d)
+    painter.drawRect(rc_border)
+    painter.restore()
 
 def draw_datetime(painter, rc_canvas):
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -487,6 +498,7 @@ def draw_datetime(painter, rc_canvas):
     width, height = bbox.width(), bbox.height()
     width -= width % size + (size if width % size else 0)
     x = rc_canvas.width() * config.DATETIME_HORZ_POS_RATIO - width / 2.0
+    x = min(rc_canvas.width() - width - 2 * fm.lineSpacing(), x)
     rc_text = QRect(x, rc_canvas.bottom() - height, width, height)
     d = fm.lineSpacing() * config.DATETIME_VERT_MARGIN_LINESPACING_RATIO
     rc_text.translate(0, -d)

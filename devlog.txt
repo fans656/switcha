@@ -129,3 +129,11 @@ solution:
 2017-05-31 09:14:33
 https://mail.python.org/pipermail/python-win32/2005-February/002943.html
 extract icon
+
+2017-05-31 17:33:34
+https://evilcodecave.wordpress.com/2009/08/03/qt-undocumented-from-hicon-to-qpixmap/
+hicon 2 QPixmap
+
+https://github.com/nickcano/workstations/blob/master/QPixmapIcon.cpp
+qt_fromWinHBITMAP
+(qt5有直接的hicon2pixmap，但是要python3，以后转吧)

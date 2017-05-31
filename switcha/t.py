@@ -1,20 +1,17 @@
-# coding: utf8
-import win32gui
-import win32process
-
 from window import Windows
 
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
 
-import win32api, win32con, win32process
+class Widget(QDialog):
 
-def get_exepath(pid):
-    handle = win32api.OpenProcess(
-        win32con.PROCESS_ALL_ACCESS, False, pid)
-    exe = win32process.GetModuleFileNameEx(handle, 0)
-    return exe
+    def __init__(self, parent=None):
+        super(Widget, self).__init__(parent)
+        wnds = Windows()
+        for wnd in wnds:
+            im = wnd.icon
 
-wnds = Windows()
-for wnd in wnds:
-    tid, pid = win32process.GetWindowThreadProcessId(wnd.hwnd)
-    path = get_exepath(pid)
-    print win32gui.ExtractIconEx(path, 0)
+app = QApplication([])
+w = Widget()
+#w.show()
+app.exec_()

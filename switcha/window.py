@@ -1,13 +1,18 @@
 import locale
 import logging
 import ctypes
+import struct
 from ctypes import windll
+from ctypes import wintypes
 from functools import partial
 
 import win32gui
 import win32con
 import win32api
 import win32process
+import pywintypes
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
 from f6 import each
 
 try:
@@ -21,6 +26,18 @@ __all__ = [
     'Windodws',
     'RendableWindows',
 ]
+
+user32 = windll.user32
+gdi32 = windll.gdi32
+
+ALT_TAB_EXCLUDES = set([
+    r'C:\Windows\System32\ApplicationFrameHost.exe',
+    r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe',
+    (r'C:\Program Files\WindowsApps\Microsoft.Windows.Photos_17.425.10010.0'
+     r'_x64__8wekyb3d8bbwe\Microsoft.Photos.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_11703.1001.45.0_x64'
+     r'__8wekyb3d8bbwe\WinStore.App.exe'),
+])
 
 Normal = 0
 Switched = 1
@@ -40,7 +57,7 @@ def alt_tab_windows(hwnds=None):
 
 def get_windows(wnds=None):
     wnds = [Window(hwnd, wnds=wnds) for hwnd in alt_tab_windows()]
-    wnds = filter(lambda w: w.title != 'Program Manager', wnds)
+    wnds = filter(lambda w: w.path not in ALT_TAB_EXCLUDES, wnds)
     return wnds
 
 def get_alt_tab_target():
@@ -54,10 +71,28 @@ def is_alt_tab_window(hwnd):
         return False
     if win32gui.GetWindow(hwnd, win32con.GW_OWNER):
         return False
+    if hwnd == windll.user32.GetShellWindow():
+        return False
     title = win32gui.GetWindowText(hwnd)
+    if (win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+            & win32con.WS_EX_TOOLWINDOW):
+        return False
+    root = user32.GetAncestor(hwnd, win32con.GA_ROOTOWNER)
+    last = last_visible_active_popup(root)
+    if last != hwnd:
+        return False
     if not title:
         return False
     return True
+
+def last_visible_active_popup(hwnd):
+    while True:
+        h = user32.GetLastActivePopup(hwnd)
+        if win32gui.IsWindowVisible(h):
+            return h
+        elif h == hwnd:
+            return None
+        hwnd = h
 
 class Window(object):
 
@@ -118,23 +153,34 @@ class Window(object):
     def normal(self):
         return self.status == Normal
 
-    def draw_icon(self, widget, rc):
-        hwnd = self.hwnd
-        tid, pid = win32process.GetWindowThreadProcessId(hwnd)
+    @property
+    def icon(self):
         try:
-            handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, pid)
-        except Exception:
-            return
+            icons_large, icons_small = win32gui.ExtractIconEx(self.path, 0)
+        except pywintypes.error:
+            logger.warning('ExtractIconEx failed: {}'.format(self.path))
+            return QPixmap()
+        icons = icons_large + icons_small
+        if not icons:
+            logger.warning('no icons: {}'.format(self.path))
+            return QPixmap()
+        pixmap = hicon2pixmap(icons[0])
+        for hicon in icons:
+            win32gui.DestroyIcon(hicon)
+        return pixmap
+
+    @property
+    def path(self):
+        tid, pid = win32process.GetWindowThreadProcessId(self.hwnd)
+        try:
+            handle = win32api.OpenProcess(
+                win32con.PROCESS_ALL_ACCESS, False, pid)
+        except Exception as e:
+            logger.warning('get exe path failed: {} {}'.format(
+                self.hwnd, self.title))
+            return ''
         path = win32process.GetModuleFileNameEx(handle, 0)
-        icon_large, icon_small = win32gui.ExtractIconEx(path, 0)
-        hdc = win32gui.GetDC(hwnd)
-        #hdc = widget.getDC()
-        print icon_large, icon_small
-        rc.translate(-32, -32)
-        # will draw in the process's window
-        print windll.user32.DrawIcon(hdc, 0, 0, icon_large[0])
-        win32gui.ReleaseDC(hwnd, hdc)
-        #widget.releaseDC()
+        return path
 
     def __eq__(self, o):
         return self.hwnd == o.hwnd
@@ -298,7 +344,153 @@ class RendableWindows(Windows):
             wnds[i] = RendableWindow(wnd.hwnd, self.target, wnds=self)
         assert all(w.wnds for w in self.wnds)
 
+# convert hIcon to QPixmap
+# https://evilcodecave.wordpress.com/2009/08/03/qt-undocumented-from-hicon-to-qpixmap/
+
+class ICONINFO(ctypes.Structure):
+
+    _fields_ = [
+        ('fIcon', wintypes.BOOL),
+        ('xHotspot', wintypes.DWORD),
+        ('yHotspot', wintypes.DWORD),
+        ('hbmMask', wintypes.HBITMAP),
+        ('hbmColor', wintypes.HBITMAP),
+    ]
+
+class RGBQUAD(ctypes.Structure):
+
+    _fields_ = [
+        ('rgbBlue', wintypes.BYTE),
+        ('rgbGreen', wintypes.BYTE),
+        ('rgbRed', wintypes.BYTE),
+        ('rgbReserved', wintypes.BYTE),
+    ]
+
+class BITMAPINFOHEADER(ctypes.Structure):
+
+    _fields_ = [
+        ('biSize', wintypes.DWORD),
+        ('biWidth', wintypes.LONG),
+        ('biHeight', wintypes.LONG),
+        ('biPlanes', wintypes.WORD),
+        ('biBitCount', wintypes.WORD),
+        ('biCompression', wintypes.DWORD),
+        ('biSizeImage', wintypes.DWORD),
+        ('biXPelsPerMeter', wintypes.LONG),
+        ('biYPelsPerMeter', wintypes.LONG),
+        ('biClrUsed', wintypes.DWORD),
+        ('biClrImportant', wintypes.DWORD),
+    ]
+
+class BITMAPINFO(ctypes.Structure):
+
+    _fields_ = [
+        ('bmiHeader', BITMAPINFOHEADER),
+        ('bmiColors', RGBQUAD),
+    ]
+
+def hicon2pixmap(icon):
+    screen = user32.GetDC(0)
+    hdc = gdi32.CreateCompatibleDC(screen)
+    user32.ReleaseDC(0, screen)
+
+    iconinfo = ICONINFO()
+    if not user32.GetIconInfo(icon, ctypes.byref(iconinfo)):
+        logger.warning('convert hIcon to QPixmap failed')
+        return QPixmap()
+    w = iconinfo.xHotspot * 2
+    h = iconinfo.yHotspot * 2
+
+    bitmapInfo = BITMAPINFOHEADER()
+    bitmapInfo.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+    bitmapInfo.biWidth = w
+    bitmapInfo.biHeight = h
+    bitmapInfo.biPlanes = 1
+    bitmapInfo.biBitCount = 32
+    bitmapInfo.biCompression = win32con.BI_RGB
+    bitmapInfo.biSizeImage = 0
+    bitmapInfo.biXPelsPerMeter = 0
+    bitmapInfo.biYPelsPerMeter = 0
+    bitmapInfo.biClrUsed = 0
+    bitmapInfo.biClrImportant = 0
+
+    bits = ctypes.POINTER(wintypes.DWORD)()
+    winBitmap = gdi32.CreateDIBSection(
+        hdc,
+        ctypes.byref(bitmapInfo),
+        win32con.DIB_RGB_COLORS,
+        ctypes.byref(bits),
+        0, 0)
+    oldhdc = gdi32.SelectObject(hdc, winBitmap)
+    user32.DrawIconEx(hdc, 0, 0, icon,
+                      iconinfo.xHotspot * 2, iconinfo.yHotspot * 2,
+                      0, 0, win32con.DI_NORMAL)
+    image = from_hbitmap(hdc, winBitmap, w, h)
+    foundAlpha = False
+    for y in xrange(h):
+        scanLine = image.scanLine(y)
+        scanLine.setsize(w * 4)
+        for x in xrange(w):
+            i = x * 4
+            rgb, = struct.unpack_from('=I', scanLine, i)
+            if qAlpha(rgb):
+                foundAlpha = True
+        if foundAlpha:
+            break
+    if not foundAlpha:
+        user32.DrawIconEx(hdc, 0, 0, icon, w, h, 0, 0, win32con.DI_MASK)
+        mask = from_hbitmap(hdc, winBitmap, w, h)
+        for y in xrange(h):
+            scanLineImage = image.scanLine(y)
+            scanLineImage.setsize(w * 4)
+            scanLineMask = 0 if mask.isNull() else mask.scanLine(y)
+            scanLineMask.setsize(w * 4)
+            for x in xrange(w):
+                i = x * 4
+                mask_val = struct.unpack('=I', scanLineMask[i:i+4])[0]
+                if scanLineMask and qRed(mask_val):
+                    scanLineImage[i:i+4] = struct.pack('=I', 0)
+                else:
+                    img_val = struct.unpack('=I', scanLineImage[i:i+4])[0]
+                    img_val |= 0xff000000
+                    scanLineImage[i:i+4] = struct.pack('=I', img_val)
+    gdi32.DeleteObject(iconinfo.hbmMask)
+    gdi32.DeleteObject(iconinfo.hbmMask)
+    gdi32.SelectObject(hdc, oldhdc)
+    gdi32.DeleteObject(winBitmap)
+    gdi32.DeleteDC(hdc)
+    return QPixmap.fromImage(image)
+
+def from_hbitmap(hdc, hbitmap, w, h):
+    bmi = BITMAPINFO()
+    ctypes.memset(ctypes.byref(bmi), 0, ctypes.sizeof(bmi))
+    bmi.bmiHeader.biSize        = ctypes.sizeof(BITMAPINFOHEADER)
+    bmi.bmiHeader.biWidth       = w
+    bmi.bmiHeader.biHeight      = -h
+    bmi.bmiHeader.biPlanes      = 1
+    bmi.bmiHeader.biBitCount    = 32
+    bmi.bmiHeader.biCompression = win32con.BI_RGB
+    bmi.bmiHeader.biSizeImage   = w * h * 4
+
+    image = QImage(w, h, QImage.Format_ARGB32_Premultiplied)
+
+    data = ctypes.create_string_buffer(bmi.bmiHeader.biSizeImage)
+    memcpy = ctypes.cdll.msvcrt.memcpy
+    if gdi32.GetDIBits(hdc, hbitmap, 0, h, data, ctypes.byref(bmi),
+                       win32con.DIB_RGB_COLORS):
+        for y in xrange(h):
+            dest = image.scanLine(y)
+            dest.setsize(w * 4)
+            bpl = image.bytesPerLine()
+            i = y * bpl
+            dest[:] = data[i:i+bpl]
+    else:
+        logger.warning(
+            'converting hIcon to QPixmap, failed to get bitmap bits')
+    return image
+
 if __name__ == '__main__':
     wnds = Windows()
+    wnds = filter(lambda w: win32gui.IsWindow(w.hwnd), wnds)
     for wnd in wnds:
-        print wnd.hwnd, repr(wnd.title)
+        print wnd.path
