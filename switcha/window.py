@@ -6,6 +6,8 @@ from functools import partial
 
 import win32gui
 import win32con
+import win32api
+import win32process
 from f6 import each
 
 try:
@@ -115,6 +117,24 @@ class Window(object):
     @property
     def normal(self):
         return self.status == Normal
+
+    def draw_icon(self, widget, rc):
+        hwnd = self.hwnd
+        tid, pid = win32process.GetWindowThreadProcessId(hwnd)
+        try:
+            handle = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, False, pid)
+        except Exception:
+            return
+        path = win32process.GetModuleFileNameEx(handle, 0)
+        icon_large, icon_small = win32gui.ExtractIconEx(path, 0)
+        hdc = win32gui.GetDC(hwnd)
+        #hdc = widget.getDC()
+        print icon_large, icon_small
+        rc.translate(-32, -32)
+        # will draw in the process's window
+        print windll.user32.DrawIcon(hdc, 0, 0, icon_large[0])
+        win32gui.ReleaseDC(hwnd, hdc)
+        #widget.releaseDC()
 
     def __eq__(self, o):
         return self.hwnd == o.hwnd

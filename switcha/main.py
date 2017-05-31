@@ -31,9 +31,16 @@ Keys:
     Ctrl-Alt-F  Switch to next with panel
 
 Bugs:
-    !!) thumb flash between frameless & framed
+    !) on windows 10, sometimes background will lose transparency,
+       thus become totally black
+    ) when there is only 1 window, thumbnail appears too large
+    ) when no activate window, ctrl-d/f should go to e.g. 1st window.
+      ease use for one hand.
 
 Todos:
+    !!!) add program icon
+    ) when there are few windows (less than 5) map ctrl-alt-[1-5] to
+      these windows, ease use for one hand
     ) workspace
     ) similar window replace previous closed slot (chrome)
     ) memorized pin (window title? executable path?)
@@ -62,7 +69,7 @@ logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
 logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
-#logging.getLogger('keyboard').setLevel(logging.INFO)
+logging.getLogger('keyboard').setLevel(logging.INFO)
 #logging.getLogger('window').setLevel(logging.DEBUG)
 
 # https://msdn.microsoft.com/en-us/library/windows/desktop/dd375731(v=vs.85).aspx
@@ -286,10 +293,6 @@ class Widget(QDialog):
         pen = painter.pen()
         pen.setColor(color)
         painter.setPen(pen)
-        # darken background
-        color = QColor(config.BACK_COLOR)
-        color.setAlpha(int(255 * (max(0.0, min(config.DARKEN_RATIO, 1.0)))))
-        painter.fillRect(self.rect(), color)
         # metrics
         canvas_width = self.width()
         canvas_height = self.height()
@@ -306,7 +309,7 @@ class Widget(QDialog):
         item_width = (board_width - (n_cols - 1) * horz_gap) / float(n_cols)
         item_height = (board_height - (n_rows - 1) * vert_gap) / float(n_rows)
         # probe layout
-        layouts = do_layout(
+        layouts, rc_bounding = do_layout(
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
         # actual metrics
@@ -316,9 +319,15 @@ class Widget(QDialog):
         old_bottom_margin = bottom_margin
         bottom_margin += vert_save / 2.0
         # actual layout
-        layouts = do_layout(
+        layouts, rc_bounding = do_layout(
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
+        # draw darken back
+        color = QColor(config.BACK_COLOR)
+        color.setAlpha(int(255 * (max(0.0, min(config.DARKEN_RATIO, 1.0)))))
+        d = fm.lineSpacing() * 2
+        rc_back = rc_bounding.adjusted(-d, -d, d, 1.5 * d)
+        painter.fillRect(rc_back, color)
         # painting
         for i, lt in enumerate(layouts):
             wnd = lt['wnd']
@@ -327,6 +336,17 @@ class Widget(QDialog):
             rc_thumb = lt['rc_thumb']
             if wnd:
                 wnd.render(rc_thumb)
+            rc_icon = QRect(rc_item.left(), rc_item.top(), 32, 32)
+            #wnd.draw_icon(self, rc_icon)
+            if wnd.current:
+                painter.save()
+                pen = painter.pen()
+                pen.setWidth(3)
+                painter.setPen(pen)
+                d = fm.lineSpacing() * 0.6
+                rc_border = rc_item.adjusted(-d, -d, d, 2 * d)
+                painter.drawRect(rc_border)
+                painter.restore()
             # dummy also draw title inorder to have marker
             draw_title(painter, lt, res=self.res)
         rc_bottom = QRect(0, canvas_height - old_bottom_margin,
@@ -370,12 +390,18 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
     rc_thumbs = [lt['rc_thumb'] for lt in layouts]
     max_thumb_height = max(rc.height() for rc in rc_thumbs)
     dummy_thumb_margin = (rc_item.height() - max_thumb_height) / 2.0
+    left = top = float('inf')
+    right = bottom = 0
     for lt in layouts:
         wnd = lt['wnd']
         rc_item = lt['rc_item']
         if not wnd:
             lt['rc_thumb'] = rc_item.adjusted(0, dummy_thumb_margin,
                                               0, -dummy_thumb_margin)
+        left = min(left, rc_item.left())
+        top = min(top, rc_item.top())
+        right = max(right, rc_item.right())
+        bottom = max(bottom, rc_item.bottom())
     # row metrics
     for row in xrange(n_rows):
         i = row * n_cols
@@ -383,7 +409,8 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
         rc_thumbs = list(each(lts)['rc_thumb'])
         each(lts)['min_thumb_top'] = min(rc.top() for rc in rc_thumbs)
         each(lts)['max_thumb_bottom'] = max(rc.bottom() for rc in rc_thumbs)
-    return layouts
+    rc_bounding = QRect(left, top, right - left, bottom - top)
+    return layouts, rc_bounding
 
 def draw_dummy_thumb(painter, layout, ch):
     rc_item = layout['rc_item']
@@ -416,6 +443,7 @@ def draw_title(painter, layout, res):
     title_width -= marker_width + marker_gap
     marker_height = fm.lineSpacing()
     baseline = max_thumb_bottom + fm.lineSpacing()
+    rc = rc_item.adjusted(0, 0, 0, fm.lineSpacing())
     rc_item_marker = QRect(rc_item.left(), baseline + 3 - marker_height,
                       marker_width, marker_height)
     if wnd.pinned:
@@ -433,23 +461,46 @@ def draw_title(painter, layout, res):
     # draw title
     title = fm.elidedText(wnd.title, Qt.ElideRight, title_width)
     x = rc_item_marker.right() + marker_gap
-    if wnd.current:
-        painter.save()
-        pen = painter.pen()
-        pen.setColor(QColor(config.ACTIVE_TITLE_COLOR))
-        painter.setPen(pen)
-        painter.drawText(x, baseline, title)
-        painter.restore()
-    else:
-        painter.drawText(x, baseline, title)
+    #if wnd.current:
+    #    painter.save()
+    #    pen = painter.pen()
+    #    pen.setColor(QColor(config.ACTIVE_TITLE_COLOR))
+    #    painter.setPen(pen)
+    #    painter.drawText(x, baseline, title)
+    #    painter.restore()
+    #else:
+    #    painter.drawText(x, baseline, title)
+    painter.drawText(x, baseline, title)
 
 def draw_datetime(painter, rc):
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     painter.save()
+
     font = painter.font()
     font.setPixelSize(30)
+    font.setWeight(QFont.Black)
     painter.setFont(font)
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    painter.drawText(rc, Qt.AlignCenter, now)
+
+    fm = painter.fontMetrics()
+    rc.translate(-fm.lineSpacing(), 0)
+    #rc.setLeft(rc.right() - 350)
+    #rc.setBottom(rc.bottom() - 50)
+
+    #color = QColor('#000')
+    #color.setAlpha(50)
+    #painter.fillRect(rc, color)
+
+    pen = painter.pen()
+    pen.setColor(QColor('#000'))
+    painter.setPen(pen)
+    painter.drawText(rc, Qt.AlignCenter | Qt.AlignRight, now)
+
+    rc.translate(-1, -1)
+    pen = painter.pen()
+    pen.setColor(QColor('#eee'))
+    painter.setPen(pen)
+    painter.drawText(rc, Qt.AlignCenter | Qt.AlignRight, now)
+
     painter.restore()
 
 def get_rowcols(wnds):
@@ -474,7 +525,8 @@ def get_rowcols(wnds):
 app = QApplication([])
 
 font = app.font()
-font.setFamily('Consolas')
+font.setFamily('Microsoft YaHei')
+font.setWeight(QFont.Normal)
 app.setFont(font)
 
 w = Widget()

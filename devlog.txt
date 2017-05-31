@@ -116,3 +116,16 @@ bug fix
 solution: let dummy window rc_thumb = rc_item
 . too big 'Availble' font size
 solution: min(rc_item.height() * 0.25, 30)
+
+2017-05-31 03:12:10
+. windows 10, after task manager open/close, can not activate anymore
+solution: run as administrator
+. thumb flash between frameless & framed
+solution:
+    thumbprop.fSourceClientAreaOnly = 0
+    dwmapi.DwmUpdateThumbnailProperties(
+        self.thumbnail, ctypes.byref(thumbprop))
+
+2017-05-31 09:14:33
+https://mail.python.org/pipermail/python-win32/2005-February/002943.html
+extract icon
