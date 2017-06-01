@@ -17,6 +17,7 @@ from f6 import each
 
 try:
     from thumbnail import Thumbnail
+    import config
 except ImportError:
     pass
 
@@ -44,6 +45,7 @@ Switched = 1
 Pinned = 2
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 def enum_windows():
     hwnds = []
@@ -158,7 +160,8 @@ class Window(object):
         try:
             icons_large, icons_small = win32gui.ExtractIconEx(self.path, 0)
         except pywintypes.error:
-            logger.warning('ExtractIconEx failed: {}'.format(self.path))
+            logger.warning('ExtractIconEx failed: title={}, path={}'.format(
+                self.title, self.path))
             return QPixmap()
         icons = icons_large + icons_small
         if not icons:
@@ -175,11 +178,11 @@ class Window(object):
         try:
             handle = win32api.OpenProcess(
                 win32con.PROCESS_ALL_ACCESS, False, pid)
+            path = win32process.GetModuleFileNameEx(handle, 0)
         except Exception as e:
-            logger.warning('get exe path failed: {} {}'.format(
-                self.hwnd, self.title))
+            logger.warning('get exe path failed: hwnd={} title={} handle={}'.format(
+                self.hwnd, repr(self.title), handle))
             return ''
-        path = win32process.GetModuleFileNameEx(handle, 0)
         return path
 
     def __eq__(self, o):
@@ -504,4 +507,6 @@ if __name__ == '__main__':
     wnds = Windows()
     wnds = filter(lambda w: win32gui.IsWindow(w.hwnd), wnds)
     for wnd in wnds:
-        print wnd.path
+        print repr(wnd.title)
+        print repr(wnd.path)
+        print

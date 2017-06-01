@@ -31,6 +31,7 @@ Keys:
     Ctrl-Alt-F  Switch to next with panel
 
 Bugs:
+    !!) on company's thinkpad t460, get exe path failed (potplayer, explorer)
     !) on windows 10, sometimes background will lose transparency,
        thus become totally black
     !) after sleep/resume, will show non-taskbar windows
@@ -69,7 +70,7 @@ import config
 
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
-#logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
 #logging.getLogger('keyboard').setLevel(logging.INFO)
 #logging.getLogger('window').setLevel(logging.DEBUG)
@@ -215,19 +216,24 @@ class Widget(QDialog):
         alt = win32con.MOD_ALT if alt else 0
 
         key = ord(ch)
+        hotkey = '-'.join(modifiers)
         logger.info('registering {}-{} (0x{:02x})'.format(
-            '-'.join(modifiers), ch, key))
+            hotkey, ch, key))
         id = len(self._hotkey_handlers)
         if args is None:
             args = (ch,)
         self._hotkey_handlers[id] = (callback, args)
         hwnd = self.winId()
         modifiers = ctrl | alt | shift
-        win32gui.RegisterHotKey(
-            hwnd, id, modifiers, key)
+        try:
+            win32gui.RegisterHotKey(
+                hwnd, id, modifiers, key)
+        except pywintypes.error as e:
+            logger.warning(u'register hotkey {} failed, {}'.format(
+                hotkey, e.strerror))
+            return None
         if ephemeral:
             self._hotkey_ids_when_active.append(id)
-        return id
 
     def on_activate(self):
         self.activate()
