@@ -193,7 +193,6 @@ class RendableWindow(Window):
     def __init__(self, hwnd, target, *args, **kwds):
         super(RendableWindow, self).__init__(hwnd, *args, **kwds)
         self.thumb = Thumbnail(target, hwnd)
-        assert hasattr(self, 'hwnd')
 
     def render(self, rc):
         self.thumb.render(rc)
@@ -277,6 +276,15 @@ class Windows(object):
         return self.current_index != -1
 
     @property
+    def first(self):
+        return next(w for w in self.wnds if w)
+
+    @property
+    def last_active(self):
+        # TODO: now just return first
+        return self.first
+
+    @property
     def next(self):
         i = self.current_index
         while True:
@@ -316,6 +324,9 @@ class Windows(object):
     def __setitem__(self, i, v):
         self.wnds[i] = v
 
+    def __nonzero__(self):
+        return any(w for w in self.wnds)
+
 class RendableWindows(Windows):
 
     def __init__(self, target):
@@ -325,7 +336,6 @@ class RendableWindows(Windows):
             target - a QWidget target to render thumbnails to
         """
         super(RendableWindows, self).__init__()
-        assert all(not isinstance(w, DummyWindow) for w in self.wnds)
         self.wnds = [RendableWindow(w.hwnd, target, wnds=self)
                      for w in self.wnds]
         self.target = target
@@ -338,11 +348,12 @@ class RendableWindows(Windows):
     def update(self):
         super(RendableWindows, self).update()
         wnds = self.wnds
+        if len(wnds) < 8:
+            dummies = [DummyWindow(wnds=self) for _ in xrange(8 - len(wnds))]
         for i, wnd in enumerate(wnds):
             if not wnd or isinstance(wnd, RendableWindow):
                 continue
             wnds[i] = RendableWindow(wnd.hwnd, self.target, wnds=self)
-        assert all(w.wnds for w in self.wnds)
 
 # convert hIcon to QPixmap
 # https://evilcodecave.wordpress.com/2009/08/03/qt-undocumented-from-hicon-to-qpixmap/

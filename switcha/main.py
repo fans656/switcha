@@ -159,6 +159,8 @@ class Widget(QDialog):
         wnds.update()
         if wnds.has_current:
             wnds.prev.activate()
+        elif wnds:
+            wnds.last_active.activate()
         self.update()
 
     def switch_to_next(self):
@@ -167,6 +169,8 @@ class Widget(QDialog):
         wnds.update()
         if wnds.has_current:
             wnds.next.activate()
+        elif wnds:
+            wnds.last_active.activate()
         self.update()
 
     def pin_to_index(self, idx):
@@ -517,21 +521,17 @@ def draw_datetime(painter, rc_canvas):
 
 def get_rowcols(wnds):
     n = len(wnds)
+    cols = 4
     if n <= 4:
         rows = 1
-        cols = n
     elif n <= 8:
         rows = 2
-        cols = 4
     elif n <= 12:
         rows = 3
-        cols = 4
     elif n <= 16:
         rows = 4
-        cols = 4
     else:
         rows = (n + 3) // 4
-        cols = 4
     return rows, cols
 
 app = QApplication([])
