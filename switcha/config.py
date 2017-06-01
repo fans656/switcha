@@ -1,5 +1,9 @@
 import logging
 
+quick_modifier = 'alt'
+pin_modifier = 'ctrl'
+panel_modifier = 'shift'
+
 QUICK_SWITCH_PANEL_DELAY = 200
 
 SIZE_RATIO = 1

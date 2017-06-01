@@ -21,14 +21,14 @@ Keys:
     Alt-9       Switch to 17th window without panel
     Alt-0       Switch to 18th window without panel
 
-    Ctrl-Alt-<key>   Switch to the <key> window with panel
-    Alt-Shift-<key>  Pin to <key> window
+    Alt-Shift-<key>   Switch to the <key> window with panel
+    Ctrl-Alt-<key>  Pin to <key> window
 
     Alt-,       Switch to prev without panel
     Alt-.       Switch to prev without panel
 
-    Ctrl-Alt-D  Switch to prev with panel
-    Ctrl-Alt-F  Switch to next with panel
+    Alt-Shift-D  Switch to prev with panel
+    Alt-Shift-F  Switch to next with panel
 
 Bugs:
     !!) on company's thinkpad t460, get exe path failed (potplayer, explorer)
@@ -67,6 +67,10 @@ from PyQt4.QtGui import *
 from keyboard import Keyboard
 from window import RendableWindows
 import config
+
+QMOD = config.quick_modifier
+PMOD = config.pin_modifier
+NMOD = config.panel_modifier
 
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -114,24 +118,24 @@ class Widget(QDialog):
         self._hotkey_ids_when_active = []
         on_hotkey = self.on_hotkey
 
-        # ctrl alt to for panel
-        kbd.on('ctrl alt', self.on_activate)
-        kbd.on('alt ctrl', self.on_activate)
-        kbd.on('ctrl alt^', self.on_deactivate)
-        kbd.on('alt ctrl^', self.on_deactivate)
+        # shift alt to for panel
+        kbd.on(' '.join((QMOD, NMOD)), self.on_activate)
+        kbd.on(' '.join((NMOD, QMOD)), self.on_activate)
+        kbd.on(' '.join((QMOD, NMOD)) + '^', self.on_deactivate)
+        kbd.on(' '.join((NMOD, QMOD)) + '^', self.on_deactivate)
         # right alt for seeing time with one hand
         kbd.on('ralt', self.on_activate)
         kbd.on('ralt^', self.on_deactivate)
 
         # switch/pin to prev/next
-        on_hotkey('alt', COMMA, self.switch_to_prev)
-        on_hotkey('alt shift', COMMA, self.pin_to_prev)
-        on_hotkey('alt', PERIOD, self.switch_to_next)
-        on_hotkey('alt shift', PERIOD, self.pin_to_next)
+        on_hotkey(QMOD, COMMA, self.switch_to_prev)
+        on_hotkey(' '.join((QMOD, PMOD)), COMMA, self.pin_to_prev)
+        on_hotkey(QMOD, PERIOD, self.switch_to_next)
+        on_hotkey(' '.join((QMOD, PMOD)), PERIOD, self.pin_to_next)
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
-            on_hotkey('alt', ch, self.switch_to_index, args=(i,))
-            on_hotkey('alt shift', ch, self.pin_to_index, args=(i,))
+            on_hotkey(QMOD, ch, self.switch_to_index, args=(i,))
+            on_hotkey(' '.join((QMOD, PMOD)), ch, self.pin_to_index, args=(i,))
 
         self.datetime_timer = QTimer()
         self.datetime_timer.timeout.connect(self.update)
@@ -248,13 +252,11 @@ class Widget(QDialog):
         on_hotkey = self.on_hotkey
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
-            on_hotkey('ctrl alt', ch, self.switch_to_index, args=(i,),
-                      ephemeral=True)
+            on_hotkey(' '.join((QMOD, NMOD)), ch, self.switch_to_index,
+                      args=(i,), ephemeral=True)
         # panel switch to prev/next
-        on_hotkey('ctrl alt', 'F', self.switch_to_next, ephemeral=True)
-        on_hotkey('ctrl alt', 'D', self.switch_to_prev, ephemeral=True)
-        #on_hotkey('ctrl alt', COMMA, self.switch_to_prev, ephemeral=True)
-        #on_hotkey('ctrl alt', PERIOD, self.switch_to_next, ephemeral=True)
+        on_hotkey(' '.join((QMOD, NMOD)), 'F', self.switch_to_next, ephemeral=True)
+        on_hotkey(' '.join((QMOD, NMOD)), 'D', self.switch_to_prev, ephemeral=True)
         self.show_panel()
 
     def show_panel(self):
