@@ -31,17 +31,11 @@ Keys:
     Alt-Shift-F  Switch to next with panel
 
 Bugs:
-    !!) on company's thinkpad t460, get exe path failed (potplayer, explorer)
-    !) on windows 10, sometimes background will lose transparency,
+    ) on windows 10, sometimes background will lose transparency,
        thus become totally black
-    !) after sleep/resume, will show non-taskbar windows
-       such as 'Store', 'Photos', '设置'
     ) when there is only 1 window, thumbnail appears too large
-    ) when no activate window, ctrl-d/f should go to e.g. 1st window.
-      ease use for one hand.
 
 Todos:
-    !!!) add program icon
     ) when there are few windows (less than 5) map ctrl-alt-[1-5] to
       these windows, ease use for one hand
     ) workspace

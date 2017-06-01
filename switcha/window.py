@@ -161,7 +161,7 @@ class Window(object):
             icons_large, icons_small = win32gui.ExtractIconEx(self.path, 0)
         except pywintypes.error:
             logger.warning('ExtractIconEx failed: title={}, path={}'.format(
-                self.title, self.path))
+                repr(self.title), self.path))
             return QPixmap()
         icons = icons_large + icons_small
         if not icons:
@@ -176,13 +176,22 @@ class Window(object):
     def path(self):
         tid, pid = win32process.GetWindowThreadProcessId(self.hwnd)
         try:
-            handle = win32api.OpenProcess(
-                win32con.PROCESS_ALL_ACCESS, False, pid)
-            path = win32process.GetModuleFileNameEx(handle, 0)
+            access = (win32con.PROCESS_QUERY_INFORMATION
+                      | win32con.PROCESS_VM_READ)
+            handle = win32api.OpenProcess(access, False, pid)
+
+            buf = ctypes.create_unicode_buffer(256)
+            size = wintypes.DWORD(len(buf))
+            windll.kernel32.QueryFullProcessImageNameW(
+                int(handle), 0, ctypes.byref(buf), ctypes.pointer(size))
+            path = buf.value
         except Exception as e:
+            raise
             logger.warning('get exe path failed: hwnd={} title={} handle={}'.format(
                 self.hwnd, repr(self.title), handle))
             return ''
+        finally:
+            win32api.CloseHandle(handle)
         return path
 
     def __eq__(self, o):

@@ -137,3 +137,16 @@ hicon 2 QPixmap
 https://github.com/nickcano/workstations/blob/master/QPixmapIcon.cpp
 qt_fromWinHBITMAP
 (qt5有直接的hicon2pixmap，但是要python3，以后转吧)
+
+2017-06-01 13:56:09
+bug fix
+.!! on company's thinkpad t460, get exe path failed (potplayer, explorer)
+solution: use windll.kernel32.QueryFullProcessImageNameW
+.! after sleep/resume, will show non-taskbar windows
+   such as 'Store', 'Photos', '设置'
+solution: blacklist...
+
+todo
+. when no activate window, ctrl-d/f should go to e.g. 1st window.
+  ease use for one hand.
+.!!! add program icon
