@@ -121,6 +121,9 @@ class Widget(QDialog):
         kbd.on('ralt', self.on_activate)
         kbd.on('ralt^', self.on_deactivate)
 
+        # alt-m for alt-tab
+        on_hotkey(QMOD, 'M', self.alt_tab)
+
         # switch/pin to prev/next
         on_hotkey(QMOD, COMMA, self.switch_to_prev)
         on_hotkey(' '.join((QMOD, PMOD)), COMMA, self.pin_to_prev)
@@ -151,6 +154,9 @@ class Widget(QDialog):
         logger.debug('switch_to_index_and_hide', idx)
         self.switch_to_index(idx)
         self.hide()
+
+    def alt_tab(self):
+        self.wnds.last_active.activate()
 
     def switch_to_prev(self):
         logger.info('switch prev')

@@ -294,7 +294,12 @@ class Windows(object):
     @property
     def last_active(self):
         # TODO: now just return first
-        return self.first
+        wnds = get_windows()
+        if len(wnds) < 2:
+            return self.first
+        else:
+            last = wnds[1]
+            return next(w for w in self.wnds if w.hwnd == last.hwnd)
 
     @property
     def next(self):
