@@ -83,8 +83,8 @@ CAPS = chr(win32con.VK_CAPITAL)
 
 # 18 directly switch hotkeys
 # e.g. Alt-U => 1st, Alt-I => 2nd, ..., Alt-1 => 9th, Alt-0 => 18th
-DIRECT_SWITCH_HOTKEYS = 'UIOPJKL' + SEMICOLON + '1234567890'
-DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPJKL;1234567890'
+DIRECT_SWITCH_HOTKEYS = 'UIOPMKL' + SEMICOLON + '1234567890'
+DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPMKL;1234567890'
 
 class Res(object):
 
@@ -122,7 +122,7 @@ class Widget(QDialog):
         kbd.on('ralt^', self.on_deactivate)
 
         # alt-m for alt-tab
-        on_hotkey(QMOD, 'M', self.alt_tab)
+        on_hotkey(QMOD, 'J', self.alt_tab)
 
         # switch/pin to prev/next
         on_hotkey(QMOD, COMMA, self.switch_to_prev)
@@ -377,6 +377,11 @@ def do_layout(wnds, xbeg, ybeg, item_width, item_height, n_rows, n_cols,
             y = ybeg + (item_height + vert_gap) * row
             rc_item = QRect(x, y, item_width, item_height)
             if wnd:
+                if not wnd.width * wnd.height:
+                    logger.warning(
+                        u'zero sized window: title="{}", path="{}"'.format(
+                            wnd.title, wnd.path))
+                    continue
                 wh_ratio = wnd.width / float(wnd.height)
                 if wh_ratio > item_wh_ratio:
                     thumb_width = min(item_width, wnd.width)
@@ -448,17 +453,23 @@ def draw_title(painter, layout, res):
 
     # draw marker (hotkey)
     painter.save()
+    old_fm = fm
     font = painter.font()
+    font.setPixelSize(old_fm.lineSpacing() * 1.2)
     font.setWeight(QFont.Black)
     painter.setFont(font)
+    fm = painter.fontMetrics()
     pen = painter.pen()
-    pen.setColor(QColor('#555'))
+    color = QColor(config.MARKER_COLOR)
+    color.setAlpha(100)
+    pen.setColor(color)
     painter.setPen(pen)
     marker_width = fm.boundingRect('X').width()
     marker = ch
     if marker:
         painter.drawText(rc, Qt.AlignRight | Qt.AlignVCenter, marker)
-        rc.adjust(0, 0, -(marker_width + 5), 0)
+        rc.adjust(0, 0, -(marker_width + fm.lineSpacing() * 0.4), 0)
+    fm = old_fm
     painter.restore()
 
     # draw program icon
@@ -491,8 +502,8 @@ def draw_active_border(painter, rc_item):
     pen = painter.pen()
     pen.setWidth(3)
     painter.setPen(pen)
-    d = fm.lineSpacing() * 0.4
-    rc_border = rc_item.adjusted(-d, -d, d, d)
+    d = 5
+    rc_border = rc_item.adjusted(-d, -d, d, -d)
     painter.drawRect(rc_border)
     painter.restore()
 

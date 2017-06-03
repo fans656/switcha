@@ -34,10 +34,9 @@ gdi32 = windll.gdi32
 ALT_TAB_EXCLUDES = set([
     r'C:\Windows\System32\ApplicationFrameHost.exe',
     r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe',
-    (r'C:\Program Files\WindowsApps\Microsoft.Windows.Photos_17.425.10010.0'
-     r'_x64__8wekyb3d8bbwe\Microsoft.Photos.exe'),
-    (r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_11703.1001.45.0_x64'
-     r'__8wekyb3d8bbwe\WinStore.App.exe'),
+    r'C:\Program Files\WindowsApps\Microsoft.Windows.Photos_17.425.10010.0_x64__8wekyb3d8bbwe\Microsoft.Photos.exe',
+    r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_11703.1001.45.0_x64__8wekyb3d8bbwe\WinStore.App.exe',
+    r'C:\Windows\SystemApps\ShellExperienceHost_cw5n1h2txyewy\ShellExperienceHost.exe',
 ])
 
 Normal = 0
