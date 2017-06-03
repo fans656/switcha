@@ -135,8 +135,13 @@ class Window(object):
         return buf.value
 
     @property
-    def current(self):
+    def active(self):
         return self.hwnd == win32gui.GetForegroundWindow()
+    current = active
+
+    @property
+    def previously_active(self):
+        return self is self.wnds.last_active
 
     @property
     def index(self):
@@ -298,7 +303,6 @@ class Windows(object):
 
     @property
     def last_active(self):
-        # TODO: now just return first
         wnds = get_windows()
         if len(wnds) < 2:
             return self.first

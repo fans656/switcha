@@ -46,6 +46,8 @@ Todos:
     .) GUI key config (conflicts resolution and other settings)
     ..) window thumbnail image data
 '''
+import sys
+import traceback
 import logging
 from datetime import datetime
 from ctypes import windll
@@ -354,11 +356,11 @@ class Widget(QDialog):
             rc_thumb = lt['rc_thumb']
             wnd.ch = (DIRECT_SWITCH_HOTKEY_NAMES[wnd.index]
                       if wnd.index < 18 else '')
-            if wnd and wnd.current:
-                draw_active_border(painter, rc_item)
             if wnd:
                 wnd.render(rc_thumb)
                 draw_title(painter, lt, res=self.res)
+                if wnd.active or wnd.previously_active:
+                    draw_border(painter, rc_item, rc_thumb, wnd)
             else:
                 draw_dummy_thumb(painter, lt)
         draw_datetime(painter, self.rect())
@@ -496,14 +498,23 @@ def draw_title(painter, layout, res):
     title = fm.elidedText(wnd.title, Qt.ElideRight, rc.width())
     painter.drawText(rc, Qt.AlignLeft | Qt.AlignVCenter, title)
 
-def draw_active_border(painter, rc_item):
+def draw_border(painter, rc_item, rc_thumb, wnd):
     fm = painter.fontMetrics()
     painter.save()
+    color = QColor(config.BORDER_COLOR)
     pen = painter.pen()
-    pen.setWidth(3)
+    if wnd.active:
+        pen.setWidth(3)
+        d = 5
+        rc_border = rc_item.adjusted(-d, -d, d, -d)
+    else:
+        pen.setWidth(1)
+        pen.setStyle(Qt.DashLine)
+        color.setAlpha(200)
+        d = 1
+        rc_border = rc_thumb.adjusted(-d, -d, d, d)
+    pen.setColor(color)
     painter.setPen(pen)
-    d = 5
-    rc_border = rc_item.adjusted(-d, -d, d, -d)
     painter.drawRect(rc_border)
     painter.restore()
 
@@ -553,12 +564,19 @@ def get_rowcols(wnds):
         rows = (n + 3) // 4
     return rows, cols
 
-app = QApplication([])
+if __name__ == '__main__':
+    try:
+        app = QApplication([])
 
-font = app.font()
-font.setFamily('Microsoft YaHei')
-font.setWeight(QFont.Normal)
-app.setFont(font)
+        font = app.font()
+        font.setFamily('Microsoft YaHei')
+        font.setWeight(QFont.Normal)
+        app.setFont(font)
 
-w = Widget()
-app.exec_()
+        w = Widget()
+        app.exec_()
+    except Exception as e:
+        with open('dump.txt', 'w') as f:
+            s = traceback.format_exc()
+            QMessageBox.warning(None, 'switcha', s)
+            f.write(s)
