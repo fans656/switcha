@@ -236,6 +236,10 @@ class DummyWindow(Window):
         # rewrite to get the right index in case of mutiple dummies
         return next(i for i, w in enumerate(self.wnds) if w is self)
 
+    @property
+    def path(self):
+        return ''
+
     def __nonzero__(self):
         return False
 
@@ -249,6 +253,8 @@ class Windows(object):
         new = get_windows(self)
         wnds = [DummyWindow(wnds=self)
                 for _ in xrange(max(len(old), len(new)))]
+        # group similar windows
+        wnds.sort(key=lambda w: w.path)
         # stick old windows
         for wnd in set(new) & set(old):
             idx = old.index(wnd)
@@ -260,7 +266,7 @@ class Windows(object):
                 i += 1
             wnds[i] = wnd
         # fill middle holes
-        for i in xrange(4, len(wnds)):
+        for i in xrange(0, len(wnds)):
             wnd = wnds[i]
             if wnd:
                 continue
