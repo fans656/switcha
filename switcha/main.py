@@ -236,7 +236,7 @@ class Widget(QDialog):
                 hwnd, id, modifiers, key)
         except pywintypes.error as e:
             logger.warning(u'register hotkey {} failed, {}'.format(
-                hotkey, e.strerror))
+                hotkey, e.strerror.decode(config.console_encoding)))
             return None
         if ephemeral:
             self._hotkey_ids_when_active.append(id)

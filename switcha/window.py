@@ -101,6 +101,7 @@ class Window(object):
         self.hwnd = hwnd
         self.wnds = wnds
         self.status = Normal
+        self._icon = None
 
     def activate(self):
         hwnd = self.hwnd
@@ -161,20 +162,9 @@ class Window(object):
 
     @property
     def icon(self):
-        try:
-            icons_large, icons_small = win32gui.ExtractIconEx(self.path, 0)
-        except pywintypes.error:
-            logger.warning('ExtractIconEx failed: title={}, path={}'.format(
-                repr(self.title), self.path))
-            return QPixmap()
-        icons = icons_large + icons_small
-        if not icons:
-            logger.warning('no icons: {}'.format(self.path))
-            return QPixmap()
-        pixmap = hicon2pixmap(icons[0])
-        for hicon in icons:
-            win32gui.DestroyIcon(hicon)
-        return pixmap
+        if self._icon is None:
+            self._icon = self.get_icon()
+        return self._icon
 
     @property
     def path(self):
@@ -197,6 +187,22 @@ class Window(object):
         finally:
             win32api.CloseHandle(handle)
         return path
+
+    def get_icon(self):
+        try:
+            icons_large, icons_small = win32gui.ExtractIconEx(self.path, 0)
+        except pywintypes.error:
+            logger.warning('ExtractIconEx failed: title={}, path={}'.format(
+                repr(self.title), self.path))
+            return QPixmap()
+        icons = icons_large + icons_small
+        if not icons:
+            logger.warning('no icons: {}'.format(self.path))
+            return QPixmap()
+        pixmap = hicon2pixmap(icons[0])
+        for hicon in icons:
+            win32gui.DestroyIcon(hicon)
+        return pixmap
 
     def __eq__(self, o):
         return self.hwnd == o.hwnd
@@ -263,6 +269,7 @@ class Windows(object):
         # stick old windows
         for wnd in set(new) & set(old):
             idx = old.index(wnd)
+            # use old wnd (reuse resources like icon etc)
             wnds[idx] = old[idx]
         # flow new windows
         i = 0

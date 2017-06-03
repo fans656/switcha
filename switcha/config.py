@@ -27,6 +27,8 @@ DATETIME_FONT_PIXEL_SIZE = 30
 DATETIME_HORZ_POS_RATIO = 1.0
 DATETIME_VERT_MARGIN_LINESPACING_RATIO = 1.0
 
+console_encoding = 'gbk'
+
 level = logging.DEBUG
 level = logging.INFO
 
