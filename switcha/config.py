@@ -1,8 +1,17 @@
 import logging
 
-quick_modifier = 'alt'
-pin_modifier = 'ctrl'
-panel_modifier = 'shift'
+should_hides = [
+    lambda w: w.path.lower().endswith('virtualbox.exe'),
+]
+
+quick_mod_key = 'alt'
+pin_mod_key = 'ctrl'
+panel_mod_key = 'shift'
+
+quick_mod = quick_mod_key
+panel_mod = ' '.join((quick_mod_key, panel_mod_key))
+panel_modr = ' '.join((panel_mod_key, quick_mod_key))
+pin_mod = ' '.join((quick_mod_key, pin_mod_key))
 
 TOP_MARGIN_RATIO = BOTTOM_MARGIN_RATIO = 0.1
 LEFT_MARGIN_RATIO = RIGHT_MARGIN_RATIO = 3 * (

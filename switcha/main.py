@@ -1,35 +1,5 @@
 # coding: utf8
 '''
-Keys:
-    Alt-U       Switch to 1st window without panel
-    Alt-I       Switch to 2nd window without panel
-    Alt-O       Switch to 3rd window without panel
-    Alt-P       Switch to 4th window without panel
-    Alt-J       Switch to 5th window without panel
-    Alt-K       Switch to 6th window without panel
-    Alt-L       Switch to 7th window without panel
-    Alt-;       Switch to 8th window without panel
-
-    Alt-1       Switch to  9th window without panel
-    Alt-2       Switch to 10th window without panel
-    Alt-3       Switch to 11th window without panel
-    Alt-4       Switch to 12th window without panel
-    Alt-5       Switch to 13th window without panel
-    Alt-6       Switch to 14th window without panel
-    Alt-7       Switch to 15th window without panel
-    Alt-8       Switch to 16th window without panel
-    Alt-9       Switch to 17th window without panel
-    Alt-0       Switch to 18th window without panel
-
-    Alt-Shift-<key>   Switch to the <key> window with panel
-    Ctrl-Alt-<key>  Pin to <key> window
-
-    Alt-,       Switch to prev without panel
-    Alt-.       Switch to prev without panel
-
-    Alt-Shift-D  Switch to prev with panel
-    Alt-Shift-F  Switch to next with panel
-
 Bugs:
     ) on windows 10, sometimes background will lose transparency,
        thus become totally black
@@ -51,7 +21,7 @@ import traceback
 import logging
 from datetime import datetime
 from ctypes import windll
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 
 import win32gui
 import win32con
@@ -63,10 +33,6 @@ from PyQt4.QtGui import *
 from keyboard import Keyboard
 from window import RendableWindows
 import config
-
-QMOD = config.quick_modifier
-PMOD = config.pin_modifier
-NMOD = config.panel_modifier
 
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
@@ -114,33 +80,54 @@ class Widget(QDialog):
         self._hotkey_ids_when_active = []
         on_hotkey = self.on_hotkey
 
-        # shift alt to for panel
-        kbd.on(' '.join((QMOD, NMOD)), self.on_activate)
-        kbd.on(' '.join((NMOD, QMOD)), self.on_activate)
-        kbd.on(' '.join((QMOD, NMOD)) + '^', self.on_deactivate)
-        kbd.on(' '.join((NMOD, QMOD)) + '^', self.on_deactivate)
+        kbd.on(config.panel_mod, self.on_activate)
+        kbd.on(config.panel_modr, self.on_activate)
+        kbd.on(config.panel_mod + '^', self.on_deactivate)
+        kbd.on(config.panel_modr + '^', self.on_deactivate)
+
+        on_hotkey(config.panel_mod, SLASH, self.toggle_hidden_windows)
+        on_hotkey(config.pin_mod, SLASH, self.hide_window)
+
         # right alt for seeing time with one hand
         kbd.on('ralt', self.on_activate)
         kbd.on('ralt^', self.on_deactivate)
 
-        # alt-m for alt-tab
-        on_hotkey(QMOD, 'J', self.alt_tab)
+        on_hotkey(config.quick_mod, 'J', self.alt_tab)
 
         # switch/pin to prev/next
-        on_hotkey(QMOD, COMMA, self.switch_to_prev)
-        on_hotkey(' '.join((QMOD, PMOD)), COMMA, self.pin_to_prev)
-        on_hotkey(QMOD, PERIOD, self.switch_to_next)
-        on_hotkey(' '.join((QMOD, PMOD)), PERIOD, self.pin_to_next)
+        on_hotkey(config.quick_mod, COMMA, self.switch_to_prev)
+        on_hotkey(config.pin_mod, COMMA, self.pin_to_prev)
+        on_hotkey(config.quick_mod, PERIOD, self.switch_to_next)
+        on_hotkey(config.pin_mod, PERIOD, self.pin_to_next)
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
-            on_hotkey(QMOD, ch, self.switch_to_index, args=(i,))
-            on_hotkey(' '.join((QMOD, PMOD)), ch, self.pin_to_index, args=(i,))
+            on_hotkey(config.quick_mod, ch, self.switch_to_index, args=(i,))
+            on_hotkey(config.pin_mod, ch, self.pin_to_index, args=(i,))
 
         self.datetime_timer = QTimer()
         self.datetime_timer.timeout.connect(self.update)
 
         self.active = False
+        self.hiding_hidden_windows = True
         self.wnds = RendableWindows(self)
+
+    def toggle_hidden_windows(self):
+        logger.info('toggle_hidden_windows')
+        self.wnds.toggle_hidden()
+        self.update()
+
+    def hide_window(self):
+        logger.info('hide_window TODO')
+        return
+        self.wnds.update()
+        wnd = self.wnds.current
+        if not wnd:
+            logger.info('no active window to hide')
+            return
+        logger.info(u'hide window: {}'.format(wnd.title))
+        wnd.hidden = not wnd.hidden
+        self.wnds.update()
+        self.update()
 
     def switch_to_index(self, i):
         logger.info('switch to {} (1 based)'.format(i + 1))
@@ -223,8 +210,8 @@ class Widget(QDialog):
 
         key = ord(ch)
         hotkey = '-'.join(modifiers)
-        logger.info('registering {}-{} (0x{:02x})'.format(
-            hotkey, ch, key))
+        logger.info('registering {}-{} (0x{:02x}) for {}'.format(
+            hotkey, ch, key, callback.__name__))
         id = len(self._hotkey_handlers)
         if args is None:
             args = (ch,)
@@ -254,11 +241,11 @@ class Widget(QDialog):
         on_hotkey = self.on_hotkey
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
-            on_hotkey(' '.join((QMOD, NMOD)), ch, self.switch_to_index,
+            on_hotkey(config.panel_mod, ch, self.switch_to_index,
                       args=(i,), ephemeral=True)
         # panel switch to prev/next
-        on_hotkey(' '.join((QMOD, NMOD)), 'F', self.switch_to_next, ephemeral=True)
-        on_hotkey(' '.join((QMOD, NMOD)), 'D', self.switch_to_prev, ephemeral=True)
+        on_hotkey(config.panel_mod, 'F', self.switch_to_next, ephemeral=True)
+        on_hotkey(config.panel_mod, 'D', self.switch_to_prev, ephemeral=True)
         self.show_panel()
 
     def show_panel(self):
@@ -332,7 +319,11 @@ class Widget(QDialog):
             wnds, left_margin, top_margin, item_width, item_height,
             n_rows, n_cols, horz_gap, vert_gap)
         # actual metrics
-        item_height = max(lt['rc_thumb'].height() for lt in layouts)
+        # use majority's height as item_height
+        counter = Counter(lt['rc_thumb'].height() for lt in layouts)
+        item_height = sorted(counter.items(),
+                             key=lambda (h, n): n, reverse=True)[0][0]
+        #item_height = max(lt['rc_thumb'].height() for lt in layouts)
         vert_save = board_height - (item_height + vert_gap) * n_rows - vert_gap
         top_margin += vert_save / 2.0
         old_bottom_margin = bottom_margin

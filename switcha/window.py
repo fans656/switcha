@@ -97,11 +97,13 @@ def last_visible_active_popup(hwnd):
 
 class Window(object):
 
-    def __init__(self, hwnd, wnds):
+    def __init__(self, hwnd, wnds, **kwargs):
         self.hwnd = hwnd
         self.wnds = wnds
         self.status = Normal
+        self.hidden = False
         self._icon = None
+        self.__dict__.update(**kwargs)
 
     def activate(self):
         hwnd = self.hwnd
@@ -212,9 +214,12 @@ class Window(object):
 
 class RendableWindow(Window):
 
-    def __init__(self, hwnd, target, *args, **kwds):
-        super(RendableWindow, self).__init__(hwnd, *args, **kwds)
-        self.thumb = Thumbnail(target, hwnd)
+    def __init__(self, wnd, target, *args, **kwargs):
+        kwargs.update(wnd.__dict__)
+        del kwargs['hwnd']
+        super(RendableWindow, self).__init__(wnd.hwnd, *args, **kwargs)
+        self.thumb = Thumbnail(target, wnd.hwnd)
+        assert self.hidden == wnd.hidden
 
     def render(self, rc):
         self.thumb.render(rc)
@@ -258,14 +263,22 @@ class Windows(object):
 
     def __init__(self):
         self.wnds = get_windows(self)
+        self.enable_hidden = True
+
+    def toggle_hidden(self):
+        self.enable_hidden = not self.enable_hidden
+        self.update()
 
     def update(self):
         old = self.wnds
         new = get_windows(self)
         wnds = [DummyWindow(wnds=self)
                 for _ in xrange(max(len(old), len(new)))]
+        if self.enable_hidden:
+            for should_hide in config.should_hides:
+                new = filter(lambda w: not should_hide(w), new)
         # group similar windows
-        wnds.sort(key=lambda w: w.path)
+        new.sort(key=lambda w: w.path)
         # stick old windows
         for wnd in set(new) & set(old):
             idx = old.index(wnd)
@@ -311,11 +324,14 @@ class Windows(object):
     @property
     def last_active(self):
         wnds = get_windows()
-        if len(wnds) < 2:
-            return self.first
+        if not wnds:
+            return None
+        elif len(wnds) == 1:
+            return wnds[0]
         else:
-            last = wnds[1]
-            return next(w for w in self.wnds if w.hwnd == last.hwnd)
+            prev_active = wnds[1]
+            return next((w for w in self.wnds if w.hwnd == prev_active.hwnd),
+                        self.wnds[0])
 
     @property
     def next(self):
@@ -357,6 +373,9 @@ class Windows(object):
     def __setitem__(self, i, v):
         self.wnds[i] = v
 
+    def __contains__(self, wnd):
+        return wnd in self.wnds
+
     def __nonzero__(self):
         return any(w for w in self.wnds)
 
@@ -369,8 +388,8 @@ class RendableWindows(Windows):
             target - a QWidget target to render thumbnails to
         """
         super(RendableWindows, self).__init__()
-        self.wnds = [RendableWindow(w.hwnd, target, wnds=self)
-                     for w in self.wnds]
+        self.wnds = [RendableWindow(wnd, target, wnds=self)
+                     for wnd in self.wnds]
         self.target = target
         wnds = self.wnds
         if len(wnds) < 8:
@@ -386,7 +405,7 @@ class RendableWindows(Windows):
         for i, wnd in enumerate(wnds):
             if not wnd or isinstance(wnd, RendableWindow):
                 continue
-            wnds[i] = RendableWindow(wnd.hwnd, self.target, wnds=self)
+            wnds[i] = RendableWindow(wnd, self.target, wnds=self)
 
 # convert hIcon to QPixmap
 # https://evilcodecave.wordpress.com/2009/08/03/qt-undocumented-from-hicon-to-qpixmap/
@@ -535,8 +554,8 @@ def from_hbitmap(hdc, hbitmap, w, h):
 
 if __name__ == '__main__':
     wnds = Windows()
-    wnds = filter(lambda w: win32gui.IsWindow(w.hwnd), wnds)
+    wnds.update()
     for wnd in wnds:
-        print repr(wnd.title)
-        print repr(wnd.path)
+        print wnd.title
+        print repr(wnd.path), config.should_hides[0](wnd)
         print
