@@ -1,11 +1,13 @@
 # coding: utf8
 '''
 Bugs:
+    ) datetime duplicate drawings
     ) on windows 10, sometimes background will lose transparency,
        thus become totally black
     ) when there is only 1 window, thumbnail appears too large
 
 Todos:
+    ) restore state (based on hwnd/title/path)
     ) when there are few windows (less than 5) map ctrl-alt-[1-5] to
       these windows, ease use for one hand
     ) workspace
@@ -130,11 +132,11 @@ class Widget(QDialog):
         self.update()
 
     def switch_to_index(self, i):
-        logger.info('switch to {} (1 based)'.format(i + 1))
+        logger.debug('switch_to_index {}'.format(i))
         wnds = self.wnds
         wnds.update()
         if i < 0 or i >= len(wnds) or not wnds[i]:
-            logger.info('switch failed, index {} has no window'.format(i))
+            logger.info('switch_to_index failed, no window at {}'.format(i))
             return False
         wnds[i].activate()
         return True
@@ -210,7 +212,7 @@ class Widget(QDialog):
 
         key = ord(ch)
         hotkey = '-'.join(modifiers)
-        logger.info('registering {}-{} (0x{:02x}) for {}'.format(
+        logger.debug('registering {}-{} (0x{:02x}) for {}'.format(
             hotkey, ch, key, callback.__name__))
         id = len(self._hotkey_handlers)
         if args is None:
@@ -234,7 +236,7 @@ class Widget(QDialog):
     def activate(self):
         if self.active:
             return
-        logger.info('activate')
+        logger.info('activate panel')
         self.active = True
         self.wnds.update()
         self.datetime_timer.start(100)
@@ -266,7 +268,7 @@ class Widget(QDialog):
     def deactivate(self):
         if not self.active:
             return
-        logger.info('deactivate')
+        logger.info('deactivate panel')
         self.active = False
         self.datetime_timer.stop()
         hwnd = self.winId()
@@ -530,14 +532,12 @@ def draw_datetime(painter, rc_canvas):
 
     path = QPainterPath()
     path.addText(rc_text.left(), rc_text.bottom(), font, now)
-
     pen = painter.pen()
     pen.setColor(QColor(config.DATETIME_OUTLINE_COLOR))
     painter.setPen(pen)
-
     painter.fillPath(path, QColor(config.DATETIME_COLOR))
-    painter.drawPath(path)
 
+    painter.drawPath(path)
     painter.restore()
 
 def get_rowcols(wnds):

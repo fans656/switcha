@@ -106,6 +106,7 @@ class Window(object):
         self.__dict__.update(**kwargs)
 
     def activate(self):
+        logger.info(u'activate "{}"'.format(self.title))
         hwnd = self.hwnd
         _, showCmd, _, _, _ = win32gui.GetWindowPlacement(hwnd)
         minimized = showCmd == win32con.SW_SHOWMINIMIZED
