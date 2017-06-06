@@ -183,12 +183,14 @@ class Window(object):
                 int(handle), 0, ctypes.byref(buf), ctypes.pointer(size))
             path = buf.value
         except Exception as e:
-            raise
-            logger.warning('get exe path failed: hwnd={} title={} handle={}'.format(
-                self.hwnd, repr(self.title), handle))
+            logger.warning('get exe path failed: hwnd={} title={}'.format(
+                self.hwnd, repr(self.title)))
             return ''
         finally:
-            win32api.CloseHandle(handle)
+            try:
+                win32api.CloseHandle(handle)
+            except Exception:
+                pass
         return path
 
     def get_icon(self):

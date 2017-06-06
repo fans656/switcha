@@ -2,6 +2,7 @@ import logging
 
 should_hides = [
     lambda w: w.path.lower().endswith('virtualbox.exe'),
+    lambda w: w.path.lower().endswith(r'c:\windows\system32\bash.exe'),
 ]
 
 quick_mod_key = 'alt'
