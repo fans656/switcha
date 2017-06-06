@@ -35,10 +35,11 @@ from PyQt4.QtGui import *
 from keyboard import Keyboard
 from window import RendableWindows
 import config
+import utils
 
 logger = logging.getLogger(__name__)
 #logger.setLevel(logging.DEBUG)
-logger.setLevel(logging.INFO)
+#logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
 #logging.getLogger('keyboard').setLevel(logging.INFO)
 #logging.getLogger('window').setLevel(logging.DEBUG)
@@ -147,7 +148,9 @@ class Widget(QDialog):
         self.hide()
 
     def alt_tab(self):
-        self.wnds.last_active.activate()
+        last_active = self.wnds.last_active
+        if last_active:
+            last_active.activate()
 
     def switch_to_prev(self):
         logger.info('switch prev')
@@ -212,8 +215,8 @@ class Widget(QDialog):
 
         key = ord(ch)
         hotkey = '-'.join(modifiers)
-        logger.debug('registering {}-{} (0x{:02x}) for {}'.format(
-            hotkey, ch, key, callback.__name__))
+        #logger.debug('registering {}-{} (0x{:02x}) for {}'.format(
+        #    hotkey, ch, key, callback.__name__))
         id = len(self._hotkey_handlers)
         if args is None:
             args = (ch,)
@@ -230,14 +233,16 @@ class Widget(QDialog):
         if ephemeral:
             self._hotkey_ids_when_active.append(id)
 
+    @utils.debug_call
     def on_activate(self):
         self.activate()
 
+    @utils.debug_call
     def activate(self):
         if self.active:
+            logger.debug('panel already activated')
             return
-        logger.info('activate panel')
-        self.active = True
+        logger.info('activating panel')
         self.wnds.update()
         self.datetime_timer.start(100)
         on_hotkey = self.on_hotkey
@@ -260,22 +265,26 @@ class Widget(QDialog):
             height = rc_screen.height() * ratio
             self.resize(width, height)
             self.show()
+        self.active = True
 
+    @utils.debug_call
     def on_deactivate(self):
         self.deactivate()
         self.wnds.update()
 
+    @utils.debug_call
     def deactivate(self):
         if not self.active:
+            logger.debug('panel already deactivated')
             return
-        logger.info('deactivate panel')
-        self.active = False
+        logger.info('deactivating panel')
         self.datetime_timer.stop()
         hwnd = self.winId()
         for id in self._hotkey_ids_when_active:
             windll.user32.UnregisterHotKey(int(hwnd), id)
         del self._hotkey_ids_when_active[:]
         self.hide()
+        self.active = False
 
     def winEvent(self, msg):
         if msg.message == win32con.WM_HOTKEY:

@@ -330,11 +330,11 @@ class Windows(object):
         if not wnds:
             return None
         elif len(wnds) == 1:
-            return wnds[0]
+            return None
         else:
             prev_active = wnds[1]
             return next((w for w in self.wnds if w.hwnd == prev_active.hwnd),
-                        self.wnds[0])
+                        None)
 
     @property
     def next(self):

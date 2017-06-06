@@ -43,7 +43,7 @@ level = logging.DEBUG
 level = logging.INFO
 
 logging.basicConfig(
-    #filename='log.log',
+    filename='log.log',
     format='%(asctime)15s %(name)8s %(levelname)8s %(message)s',
-    #level=level,
+    level=logging.DEBUG,
 )

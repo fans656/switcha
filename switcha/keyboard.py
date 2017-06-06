@@ -18,7 +18,7 @@ class Keyboard(object):
     def __init__(self):
         self._seqs = []
         self._state = [k not in SYNTHESIS_KEYS and k in set(get_keys())
-                       for k in xrange(255)]
+                       for k in xrange(256)]
         self._hook()
 
     @staticmethod
@@ -67,7 +67,7 @@ class Keyboard(object):
                 seq.callback = callback
                 seq.args = args
                 self._seqs.append(seq)
-                logger.info('register {} '.format(repr(seq)))
+                #logger.info('register {} '.format(repr(seq)))
             return seqs
         except ValueError as e:
             logger.warning(e.message)
@@ -80,21 +80,25 @@ class Keyboard(object):
 
     def _onkey(self, ev):
         ev = KeyEvent(ev)
-        logger.debug('{:>8}({}) {:4}'.format(
-            ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
+        #logger.debug('{:>8}({}) {:4}'.format(
+        #    ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
+        if ev.KeyID >= len(self._state):
+            logger.warning('key unrecoginized: KeyID={}, Key={}'.format(
+                ev.KeyID, ev.Key))
+            return 1
         self._state[ev.KeyID] = ev.down
         sig = self.downs
-        logger.debug('downs: {}'.format(signature_str(sig)))
+        #logger.debug('downs: {}'.format(signature_str(sig)))
         for seq in self._seqs:
             if sig != seq.signature:
                 continue
-            logger.debug('sig match | ev: {}({}), trigger: {}({})'.format(
-                to_name(ev.KeyID), updown(up=ev.up),
-                to_name(seq.trigger), updown(up=seq.up)
-            ))
+            #logger.debug('sig match | ev: {}({}), trigger: {}({})'.format(
+            #    to_name(ev.KeyID), updown(up=ev.up),
+            #    to_name(seq.trigger), updown(up=seq.up)
+            #))
             match = ev.KeyID == seq.trigger and ev.up == seq.up
             if match:
-                logger.info('"{}" detected'.format(str(seq)))
+                logger.debug('"{}" detected'.format(str(seq)))
                 r = seq.callback(*seq.args)
                 if r is None:
                     return 1
