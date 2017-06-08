@@ -65,6 +65,9 @@ class Res(object):
 
 class Widget(QDialog):
 
+    activate_signal = pyqtSignal()
+    deactivate_signal = pyqtSignal()
+
     def __init__(self, parent=None):
         super(Widget, self).__init__(parent)
 
@@ -83,10 +86,13 @@ class Widget(QDialog):
         self._hotkey_ids_when_active = []
         on_hotkey = self.on_hotkey
 
-        kbd.on(config.panel_mod, self.on_activate)
-        kbd.on(config.panel_modr, self.on_activate)
-        kbd.on(config.panel_mod + '^', self.on_deactivate)
-        kbd.on(config.panel_modr + '^', self.on_deactivate)
+        self.activate_signal.connect(self.on_activate)
+        self.deactivate_signal.connect(self.on_deactivate)
+
+        kbd.on(config.panel_mod, lambda: self.activate_signal.emit())
+        kbd.on(config.panel_modr, lambda: self.activate_signal.emit())
+        kbd.on(config.panel_mod + '^', lambda: self.deactivate_signal.emit())
+        kbd.on(config.panel_modr + '^', lambda: self.deactivate_signal.emit())
 
         on_hotkey(config.panel_mod, SLASH, self.toggle_hidden_windows)
         on_hotkey(config.pin_mod, SLASH, self.hide_window)
@@ -233,11 +239,9 @@ class Widget(QDialog):
         if ephemeral:
             self._hotkey_ids_when_active.append(id)
 
-    @utils.debug_call
     def on_activate(self):
         self.activate()
 
-    @utils.debug_call
     def activate(self):
         if self.active:
             logger.debug('panel already activated')

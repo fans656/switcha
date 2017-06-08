@@ -1,4 +1,6 @@
+import Queue
 import itertools
+import threading
 import logging
 from collections import defaultdict
 
@@ -19,6 +21,7 @@ class Keyboard(object):
         self._seqs = []
         self._state = [k not in SYNTHESIS_KEYS and k in set(get_keys())
                        for k in xrange(256)]
+        self.q = Queue.Queue()
         self._hook()
 
     @staticmethod
@@ -74,14 +77,13 @@ class Keyboard(object):
 
     def run(self):
         """Helpler method to begin an event loop"""
-        from PySide.QtCore import QCoreApplication
-        app = QCoreApplication([])
-        app.exec_()
+        import pythoncom
+        pythoncom.PumpMessages()
 
     def _onkey(self, ev):
         ev = KeyEvent(ev)
-        #logger.debug('{:>8}({}) {:4}'.format(
-        #    ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
+        logger.debug('{:>8}({}) {:4}'.format(
+            ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
         if ev.KeyID >= len(self._state):
             logger.warning('key unrecoginized: KeyID={}, Key={}'.format(
                 ev.KeyID, ev.Key))
@@ -105,6 +107,15 @@ class Keyboard(object):
                 return 1 if r else 0
         return 1
 
+    def _worker(self):
+        while True:
+            ev = self.q.get()
+            self._onkey(ev)
+
+    def _onkey_callback(self, ev):
+        self.q.put(ev)
+        return 1
+
     @property
     def downs(self):
         return tuple(vk for vk, down in enumerate(self._state) if down)
@@ -115,8 +126,10 @@ class Keyboard(object):
 
     def _hook(self):
         self.hm = pyHook.HookManager()
-        self.hm.KeyAll = self._onkey
+        self.hm.KeyAll = self._onkey_callback
         self.hm.HookKeyboard()
+        self.thread = threading.Thread(target=self._worker)
+        self.thread.start()
 
 class Sequence(object):
 
@@ -235,5 +248,5 @@ if __name__ == '__main__':
     logger.setLevel(logging.DEBUG)
     #logger.setLevel(logging.INFO)
     kbd = Keyboard()
-    kbd.on('alt caps', lambda: 0)
+    kbd.on('a', lambda: 0)
     kbd.run()
