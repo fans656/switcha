@@ -173,3 +173,10 @@ https://stackoverflow.com/questions/10652713/wm-input-is-defective
 
 2017-06-10 10:43:25
 搞定
+
+2017-06-10 11:39:25
+发现还是有问题... 之前区分LMENU和RMENU的代码完全错了
+
+2017-06-10 11:59:12
+https://stackoverflow.com/a/18340130
+搞定

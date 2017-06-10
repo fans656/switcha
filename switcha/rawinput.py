@@ -10,6 +10,8 @@ user32 = windll.user32
 RIDEV_INPUTSINK = 0x100
 WM_INPUT = 0xff
 RID_INPUT = 0x10000003
+MAPVK_VSC_TO_VK_EX = 3
+RI_KEY_E0 = 2
 
 msg2name = {v: k for k, v in win32con.__dict__.items() if k.startswith('WM_')}
 vk2name = {v: k for k, v in win32con.__dict__.items() if k.startswith('VK_')}
@@ -62,18 +64,23 @@ class RAWINPUT(ctypes.Structure):
         ('keyboard', RAWKEYBOARD),
     ]
 
-def differentiated_extendable_key(vkey, extended):
-    lr = {
-        VK_MENU: (VK_LMENU, VK_RMENU),
-        VK_SHIFT: (VK_LSHIFT, VK_RSHIFT),
-        VK_CONTROL: (VK_LCONTROL, VK_RCONTROL),
-    }.get(vkey, None)
-    return lr[extended] if lr else vkey
+def differentiated_extendable_key(rk):
+    # https://stackoverflow.com/a/18340130
+    key = rk.VKey
+    extended = rk.Flags & RI_KEY_E0
+    if extended:
+        if key == VK_CONTROL:
+            key = VK_RCONTROL if extended else VK_LCONTROL
+        if key == VK_MENU:
+            key = VK_RMENU if extended else VK_LMENU
+    else:
+        key = win32api.MapVirtualKey(rk.MakeCode, MAPVK_VSC_TO_VK_EX) or key
+    return key
 
 class RawKeyEvent(object):
 
-    def __init__(self, rk, extended=False):
-        key = differentiated_extendable_key(rk.VKey, extended)
+    def __init__(self, rk):
+        key = differentiated_extendable_key(rk)
         self.Key = vk2name.get(key, chr(key))
         self.KeyID = key
         self.Message = rk.Message
@@ -90,8 +97,7 @@ def proc(onkey, hwnd, msg, wparam, lparam):
             ctypes.byref(cbSize),
             ctypes.sizeof(RAWINPUTHEADER))
         rk = ri.keyboard
-        key = rk.VKey
-        ev = RawKeyEvent(ri.keyboard, extended=bool(lparam & 0x1000))
+        ev = RawKeyEvent(ri.keyboard)
         onkey(ev)
     return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 

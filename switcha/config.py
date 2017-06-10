@@ -45,5 +45,6 @@ level = logging.INFO
 logging.basicConfig(
     filename='log.log',
     format='%(asctime)15s %(name)8s %(levelname)8s %(message)s',
-    level=logging.INFO,
+    level=logging.DEBUG,
 )
+logging.getLogger().addHandler(logging.StreamHandler())

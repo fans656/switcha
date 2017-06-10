@@ -65,9 +65,6 @@ class Res(object):
 
 class Widget(QDialog):
 
-    activate_signal = pyqtSignal()
-    deactivate_signal = pyqtSignal()
-
     def __init__(self, parent=None):
         super(Widget, self).__init__(parent)
 
@@ -86,13 +83,10 @@ class Widget(QDialog):
         self._hotkey_ids_when_active = []
         on_hotkey = self.on_hotkey
 
-        self.activate_signal.connect(self.on_activate)
-        self.deactivate_signal.connect(self.on_deactivate)
-
-        kbd.on(config.panel_mod, lambda: self.activate_signal.emit())
-        kbd.on(config.panel_modr, lambda: self.activate_signal.emit())
-        kbd.on(config.panel_mod + '^', lambda: self.deactivate_signal.emit())
-        kbd.on(config.panel_modr + '^', lambda: self.deactivate_signal.emit())
+        kbd.on(config.panel_mod, self.activate)
+        kbd.on(config.panel_modr, self.activate)
+        kbd.on(config.panel_mod + '^', self.deactivate)
+        kbd.on(config.panel_modr + '^', self.deactivate)
 
         on_hotkey(config.panel_mod, SLASH, self.toggle_hidden_windows)
         on_hotkey(config.pin_mod, SLASH, self.hide_window)

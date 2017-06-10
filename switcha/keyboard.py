@@ -22,8 +22,7 @@ class Keyboard(object):
 
     def __init__(self):
         self._seqs = []
-        self._state = [k not in SYNTHESIS_KEYS and k in set(get_keys())
-                       for k in xrange(256)]
+        self._state = [False for _ in xrange(256)]
         rawinput.register_keyboard(self._onkey)
 
     @staticmethod
@@ -247,11 +246,14 @@ def updown(down=None, up=None):
     return 'UP' if up else 'DOWN'
 
 if __name__ == '__main__':
-    def onkey():
-        print 'alt shift'
+    def onkey(updown):
+        print 'alt shift', updown
 
     logger.setLevel(logging.DEBUG)
     #logger.setLevel(logging.INFO)
     kbd = Keyboard()
-    kbd.on('alt shift', onkey)
+    kbd.on('alt shift', lambda: onkey('down'))
+    kbd.on('shift alt', lambda: onkey('down'))
+    kbd.on('alt shift^', lambda: onkey('up'))
+    kbd.on('shift alt^', lambda: onkey('up'))
     kbd.run()
