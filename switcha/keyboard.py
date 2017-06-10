@@ -1,7 +1,8 @@
-import Queue
+import time
 import itertools
 import threading
 import logging
+import traceback
 from collections import defaultdict
 
 import pyHook
@@ -9,7 +10,9 @@ import win32con
 import win32api
 from f6 import bunch
 
+import rawinput
 import config
+import utils
 
 __all__ = ['Keyboard', 'parse_seq']
 
@@ -21,8 +24,7 @@ class Keyboard(object):
         self._seqs = []
         self._state = [k not in SYNTHESIS_KEYS and k in set(get_keys())
                        for k in xrange(256)]
-        self.q = Queue.Queue()
-        self._hook()
+        rawinput.register_keyboard(self._onkey)
 
     @staticmethod
     def seq(self):
@@ -70,7 +72,7 @@ class Keyboard(object):
                 seq.callback = callback
                 seq.args = args
                 self._seqs.append(seq)
-                #logger.info('register {} '.format(repr(seq)))
+                logger.info('register {} '.format(repr(seq)))
             return seqs
         except ValueError as e:
             logger.warning(e.message)
@@ -81,40 +83,38 @@ class Keyboard(object):
         pythoncom.PumpMessages()
 
     def _onkey(self, ev):
-        ev = KeyEvent(ev)
-        logger.debug('{:>8}({}) {:4}'.format(
-            ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
-        if ev.KeyID >= len(self._state):
-            logger.warning('key unrecoginized: KeyID={}, Key={}'.format(
-                ev.KeyID, ev.Key))
+        try:
+            ev = KeyEvent(ev)
+            logger.debug('{:>8}({}) {:4}'.format(
+                ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
+            if ev.KeyID >= len(self._state):
+                logger.warning('key unrecoginized: KeyID={}, Key={}'.format(
+                    ev.KeyID, ev.Key))
+                return 1
+            self._state[ev.KeyID] = ev.down
+            sig = self.downs
+            logger.debug('downs: {}'.format(signature_str(sig)))
+            for seq in self._seqs:
+                if sig != seq.signature:
+                    continue
+                logger.debug('sig match | ev: {}({}), trigger: {}({})'.format(
+                    to_name(ev.KeyID), updown(up=ev.up),
+                    to_name(seq.trigger), updown(up=seq.up)
+                ))
+                match = ev.KeyID == seq.trigger and ev.up == seq.up
+                if match:
+                    logger.debug('"{}" detected'.format(str(seq)))
+                    r = seq.callback(*seq.args)
+                    if r is None:
+                        return 1
+                    return 1 if r else 0
             return 1
-        self._state[ev.KeyID] = ev.down
-        sig = self.downs
-        #logger.debug('downs: {}'.format(signature_str(sig)))
-        for seq in self._seqs:
-            if sig != seq.signature:
-                continue
-            #logger.debug('sig match | ev: {}({}), trigger: {}({})'.format(
-            #    to_name(ev.KeyID), updown(up=ev.up),
-            #    to_name(seq.trigger), updown(up=seq.up)
-            #))
-            match = ev.KeyID == seq.trigger and ev.up == seq.up
-            if match:
-                logger.debug('"{}" detected'.format(str(seq)))
-                r = seq.callback(*seq.args)
-                if r is None:
-                    return 1
-                return 1 if r else 0
-        return 1
-
-    def _worker(self):
-        while True:
-            ev = self.q.get()
-            self._onkey(ev)
-
-    def _onkey_callback(self, ev):
-        self.q.put(ev)
-        return 1
+        except Exception as e:
+            logger.warning('Exception throws in keyboard hook callback')
+            exc = traceback.format_exc()
+            logger.warning(exc)
+            print exc
+            return 1
 
     @property
     def downs(self):
@@ -124,12 +124,14 @@ class Keyboard(object):
     def ups(self):
         return tuple(vk for vk, down in enumerate(self._state) if not down)
 
-    def _hook(self):
-        self.hm = pyHook.HookManager()
-        self.hm.KeyAll = self._onkey_callback
-        self.hm.HookKeyboard()
-        self.thread = threading.Thread(target=self._worker)
-        self.thread.start()
+    #def hook(self):
+    #    if hasattr(self, 'hm'):
+    #        #print 'unhook'
+    #        del self.hm
+    #    #print 'hook'
+    #    self.hm = pyHook.HookManager()
+    #    self.hm.KeyAll = self._onkey
+    #    self.hm.HookKeyboard()
 
 class Sequence(object):
 
@@ -245,8 +247,11 @@ def updown(down=None, up=None):
     return 'UP' if up else 'DOWN'
 
 if __name__ == '__main__':
+    def onkey():
+        print 'alt shift'
+
     logger.setLevel(logging.DEBUG)
     #logger.setLevel(logging.INFO)
     kbd = Keyboard()
-    kbd.on('a', lambda: 0)
+    kbd.on('alt shift', onkey)
     kbd.run()

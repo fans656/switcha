@@ -150,3 +150,26 @@ todo
 . when no activate window, ctrl-d/f should go to e.g. 1st window.
   ease use for one hand.
 .!!! add program icon
+
+2017-06-09 18:26:56
+https://social.msdn.microsoft.com/Forums/windowsdesktop/en-US/f6032ca1-31b8-4ad5-be39-f78dd29952da/hooking-problem-in-windows-7?forum=windowscompatibility
+用一段时间hook就掉的bug真的超级烦，——很难debug
+现在直接暴力每5秒重新hook一次看看怎么样
+以后有空再去搞这里说的Raw Input吧
+
+2017-06-10 08:46:52
+hook还是会失效，决定尝试raw input了
+
+https://stackoverflow.com/questions/5249903/receiving-wm-copydata-in-python
+pywin32 window proc | PumpMessages
+
+http://www.toymaker.info/Games/html/raw_input.html
+register keyboard (constants)
+
+https://stackoverflow.com/questions/10652713/wm-input-is-defective
+用raw input替换掉了hook
+然而发现发来的VKey不分左右(Ctrl/Alt/Shift)——即不像hook那样发的是LMenu而是Menu
+这里有解决办法
+
+2017-06-10 10:43:25
+搞定
