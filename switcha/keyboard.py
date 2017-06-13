@@ -117,7 +117,8 @@ class Keyboard(object):
 
     @property
     def downs(self):
-        return tuple(vk for vk, down in enumerate(self._state) if down)
+        # exclude \xff virtual key code
+        return tuple(vk for vk, down in enumerate(self._state[:-1]) if down)
 
     @property
     def ups(self):
@@ -203,6 +204,9 @@ ALIASES = {
 }
 NAME2VK = {name[3:]: getattr(win32con, name) for name in dir(win32con)
            if name.startswith('VK_')}
+NAME2VK.update({
+    ';': 0xba
+})
 VK2NAME = {vk: name for name, vk in NAME2VK.items()}
 SYNTHESIS_KEYS = {
     win32con.VK_CONTROL: (
@@ -247,13 +251,10 @@ def updown(down=None, up=None):
 
 if __name__ == '__main__':
     def onkey(updown):
-        print 'alt shift', updown
+        print 'ctrl-;', updown
 
     logger.setLevel(logging.DEBUG)
     #logger.setLevel(logging.INFO)
     kbd = Keyboard()
-    kbd.on('alt shift', lambda: onkey('down'))
-    kbd.on('shift alt', lambda: onkey('down'))
-    kbd.on('alt shift^', lambda: onkey('up'))
-    kbd.on('shift alt^', lambda: onkey('up'))
+    kbd.on('ctrl ;', lambda: onkey('down'))
     kbd.run()
