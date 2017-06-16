@@ -118,12 +118,12 @@ class Keyboard(object):
     @property
     def downs(self):
         return tuple(vk for vk, down in enumerate(self._state)
-                     if down and vk != '\xff')
+                     if down and vk != 0xff)
 
     @property
     def ups(self):
         return tuple(vk for vk, down in enumerate(self._state)
-                     if not down and vk != '\xff')
+                     if not down and vk != 0xff)
 
     #def hook(self):
     #    if hasattr(self, 'hm'):

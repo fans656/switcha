@@ -1,3 +1,4 @@
+import re
 import locale
 import logging
 import ctypes
@@ -18,6 +19,7 @@ from f6 import each
 try:
     from thumbnail import Thumbnail
     import config
+    from config import ALT_TAB_EXCLUDES
 except ImportError:
     pass
 
@@ -30,14 +32,6 @@ __all__ = [
 
 user32 = windll.user32
 gdi32 = windll.gdi32
-
-ALT_TAB_EXCLUDES = set([
-    r'C:\Windows\System32\ApplicationFrameHost.exe',
-    r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe',
-    r'C:\Program Files\WindowsApps\Microsoft.Windows.Photos_17.425.10010.0_x64__8wekyb3d8bbwe\Microsoft.Photos.exe',
-    r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_11703.1001.45.0_x64__8wekyb3d8bbwe\WinStore.App.exe',
-    r'C:\Windows\SystemApps\ShellExperienceHost_cw5n1h2txyewy\ShellExperienceHost.exe',
-])
 
 Normal = 0
 Switched = 1
@@ -58,7 +52,9 @@ def alt_tab_windows(hwnds=None):
 
 def get_windows(wnds=None):
     wnds = [Window(hwnd, wnds=wnds) for hwnd in alt_tab_windows()]
-    wnds = filter(lambda w: w.path not in ALT_TAB_EXCLUDES, wnds)
+    wnds = filter(lambda w: not any(
+        w.path.startswith(prefix) and w.path.endswith(postfix)
+        for prefix, postfix in ALT_TAB_EXCLUDES), wnds)
     return wnds
 
 def get_alt_tab_target():
@@ -560,5 +556,5 @@ if __name__ == '__main__':
     wnds.update()
     for wnd in wnds:
         print wnd.title
-        print repr(wnd.path), config.should_hides[0](wnd)
+        print wnd.path
         print

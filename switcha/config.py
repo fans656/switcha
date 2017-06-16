@@ -5,6 +5,15 @@ should_hides = [
     lambda w: w.path.lower().endswith(r'c:\windows\system32\bash.exe'),
 ]
 
+ALT_TAB_EXCLUDES = set([
+    (r'C:\Windows\System32\ApplicationFrameHost.exe', ''),
+    (r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe', ''),
+    (r'C:\Program Files\WindowsApps\Microsoft.Windows.Photos_', r'\Microsoft.Photos.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_', r'\WinStore.App.exe'),
+    (r'C:\Windows\SystemApps\ShellExperienceHost_', r'\ShellExperienceHost.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.Getstarted_', r'\WhatsNew.Store.exe'),
+])
+
 quick_mod_key = 'alt'
 pin_mod_key = 'ctrl'
 panel_mod_key = 'shift'

@@ -1,12 +1,15 @@
 # coding: utf8
 '''
 Bugs:
+    ) alt-j sometimes nonfunctional
     ) datetime duplicate drawings
     ) on windows 10, sometimes background will lose transparency,
        thus become totally black
     ) when there is only 1 window, thumbnail appears too large
 
 Todos:
+    ) show 8 slots initialiy
+    ) put window to KL slots initially
     ) restore state (based on hwnd/title/path)
     ) when there are few windows (less than 5) map ctrl-alt-[1-5] to
       these windows, ease use for one hand
