@@ -2,7 +2,7 @@ import logging
 
 should_hides = [
     lambda w: w.path.lower().endswith('virtualbox.exe'),
-    lambda w: w.path.lower().endswith(r'c:\windows\system32\bash.exe'),
+    #lambda w: w.path.lower().endswith(r'c:\windows\system32\bash.exe'),
 ]
 
 ALT_TAB_EXCLUDES = set([
@@ -12,16 +12,25 @@ ALT_TAB_EXCLUDES = set([
     (r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_', r'\WinStore.App.exe'),
     (r'C:\Windows\SystemApps\ShellExperienceHost_', r'\ShellExperienceHost.exe'),
     (r'C:\Program Files\WindowsApps\Microsoft.Getstarted_', r'\WhatsNew.Store.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.Getstarted_', r'\WhatsNew.Store.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.Office.OneNote_', r'\onenoteim.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.WindowsCalculator_', r'\Calculator.exe'),
 ])
 
-quick_mod_key = 'alt'
-pin_mod_key = 'ctrl'
-panel_mod_key = 'shift'
+#quick_mod_key = 'alt'
+#pin_mod_key = 'ctrl'
+#panel_mod_key = 'shift'
+#
+#quick_mod = quick_mod_key
+#panel_mod = ' '.join((quick_mod_key, panel_mod_key))
+#panel_modr = ' '.join((panel_mod_key, quick_mod_key))
+#pin_mod = ' '.join((quick_mod_key, pin_mod_key))
 
-quick_mod = quick_mod_key
-panel_mod = ' '.join((quick_mod_key, panel_mod_key))
-panel_modr = ' '.join((panel_mod_key, quick_mod_key))
-pin_mod = ' '.join((quick_mod_key, pin_mod_key))
+quick_mod = 'ctrl alt'
+quick_mod_reversed = 'alt ctrl'
+panel_mod = 'alt shift'
+panel_mod_reversed = 'shift alt'
+pin_mod = 'ralt'
 
 TOP_MARGIN_RATIO = BOTTOM_MARGIN_RATIO = 0.1
 LEFT_MARGIN_RATIO = RIGHT_MARGIN_RATIO = 3 * (
@@ -49,11 +58,11 @@ DATETIME_VERT_MARGIN_LINESPACING_RATIO = 1.0
 console_encoding = 'gbk'
 
 level = logging.DEBUG
-level = logging.INFO
+#level = logging.INFO
 
 logging.basicConfig(
     filename='log.log',
     format='%(asctime)15s %(name)8s %(levelname)8s %(message)s',
-    level=logging.DEBUG,
+    level=level,
 )
 logging.getLogger().addHandler(logging.StreamHandler())

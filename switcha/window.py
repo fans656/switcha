@@ -59,6 +59,10 @@ def get_windows(wnds=None):
 
 def get_alt_tab_target():
     wnds = get_windows()
+    print '=' * 70, 'alt tab'
+    for i, wnd in enumerate(wnds):
+        print u'{:2} {}'.format(i, wnd.title)
+    print '=' * 70
     return wnds[1] if wnds else None
 
 def is_alt_tab_window(hwnd):
@@ -74,10 +78,10 @@ def is_alt_tab_window(hwnd):
     if (win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
             & win32con.WS_EX_TOOLWINDOW):
         return False
-    root = user32.GetAncestor(hwnd, win32con.GA_ROOTOWNER)
-    last = last_visible_active_popup(root)
-    if last != hwnd:
-        return False
+    #root = user32.GetAncestor(hwnd, win32con.GA_ROOTOWNER)
+    #last = last_visible_active_popup(root)
+    #if last != hwnd:
+    #    return False
     if not title:
         return False
     return True

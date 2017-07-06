@@ -84,22 +84,22 @@ class Keyboard(object):
     def _onkey(self, ev):
         try:
             ev = KeyEvent(ev)
-            logger.debug('{:>8}({}) {:4}'.format(
-                ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
+            #logger.debug('{:>8}({}) {:4}'.format(
+            #    ev.Key, hex(ev.KeyID), 'DOWN' if ev.down else 'UP'))
             if ev.KeyID >= len(self._state):
                 logger.warning('key unrecoginized: KeyID={}, Key={}'.format(
                     ev.KeyID, ev.Key))
                 return 1
             self._state[ev.KeyID] = ev.down
             sig = self.downs
-            logger.debug('downs: {}'.format(signature_str(sig)))
+            #logger.debug('downs: {}'.format(signature_str(sig)))
             for seq in self._seqs:
                 if sig != seq.signature:
                     continue
-                logger.debug('sig match | ev: {}({}), trigger: {}({})'.format(
-                    to_name(ev.KeyID), updown(up=ev.up),
-                    to_name(seq.trigger), updown(up=seq.up)
-                ))
+                #logger.debug('sig match | ev: {}({}), trigger: {}({})'.format(
+                #    to_name(ev.KeyID), updown(up=ev.up),
+                #    to_name(seq.trigger), updown(up=seq.up)
+                #))
                 match = ev.KeyID == seq.trigger and ev.up == seq.up
                 if match:
                     logger.debug('"{}" detected'.format(str(seq)))

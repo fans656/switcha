@@ -1,5 +1,14 @@
 # coding: utf8
 '''
+Usage:
+    Ctrl-Alt-{keys} for quick switch without panel
+    Shift-Alt-{keys} for visual switch with panel
+
+    when panel is visible with Shift-Alt, relase shift will enter pin mode,
+    and you can use {keys} to pin current window to a specific slot
+
+    where {keys} is UIOPKL;123456789 and J(for Alt-Tab)
+
 Bugs:
     ) alt-j sometimes nonfunctional
     ) datetime duplicate drawings
@@ -87,24 +96,30 @@ class Widget(QDialog):
         on_hotkey = self.on_hotkey
 
         kbd.on(config.panel_mod, self.activate)
-        kbd.on(config.panel_modr, self.activate)
-        kbd.on(config.panel_mod + '^', self.deactivate)
-        kbd.on(config.panel_modr + '^', self.deactivate)
+        kbd.on(config.panel_mod_reversed, self.activate)
+        kbd.on('alt^', self.deactivate)
+        kbd.on('shift^', self.deactivate)
 
-        on_hotkey(config.panel_mod, SLASH, self.toggle_hidden_windows)
-        on_hotkey(config.pin_mod, SLASH, self.hide_window)
+        kbd.on('alt shift^', self.enter_pin_mode)
+
+        #on_hotkey(config.panel_mod, SLASH, self.toggle_hidden_windows)
+        #on_hotkey(config.pin_mod, SLASH, self.hide_window)
 
         # right alt for seeing time with one hand
         kbd.on('ralt', self.on_activate)
         kbd.on('ralt^', self.on_deactivate)
 
         on_hotkey(config.quick_mod, 'J', self.alt_tab)
+        #on_hotkey(config.quick_mod_reversed, 'J', self.alt_tab)
 
         # switch/pin to prev/next
         on_hotkey(config.quick_mod, COMMA, self.switch_to_prev)
-        on_hotkey(config.pin_mod, COMMA, self.pin_to_prev)
+        #on_hotkey(config.quick_mod_reversed, COMMA, self.switch_to_prev)
+        #on_hotkey(config.pin_mod, COMMA, self.pin_to_prev)
+
         on_hotkey(config.quick_mod, PERIOD, self.switch_to_next)
-        on_hotkey(config.pin_mod, PERIOD, self.pin_to_next)
+        #on_hotkey(config.quick_mod_reversed, PERIOD, self.switch_to_next)
+        #on_hotkey(config.pin_mod, PERIOD, self.pin_to_next)
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
             on_hotkey(config.quick_mod, ch, self.switch_to_index, args=(i,))
@@ -114,8 +129,15 @@ class Widget(QDialog):
         self.datetime_timer.timeout.connect(self.update)
 
         self.active = False
+        self.pin_mode = False
         self.hiding_hidden_windows = True
         self.wnds = RendableWindows(self)
+
+    def enter_pin_mode(self):
+        self.pin_mode = True
+
+    def exit_pin_mode(self):
+        self.pin_mode = False
 
     def toggle_hidden_windows(self):
         logger.info('toggle_hidden_windows')
@@ -151,9 +173,24 @@ class Widget(QDialog):
         self.hide()
 
     def alt_tab(self):
+        self.wnds.update()
         last_active = self.wnds.last_active
         if last_active:
             last_active.activate()
+        else:
+            target = self.wnds.last_active
+            if target:
+                target.activate()
+        #target = self.wnds.alt_tab_target
+        #if target:
+        #    target.activate()
+        #    logger.info('alt tab to "{}"'.format(target.title))
+        #    print ('alt tab to "{}"'.format(target.title))
+        #else:
+        #    logger.warning('no alt-tab target')
+        #    for i, wnd in enumerate(self.wnds):
+        #        logger.warning('{:2} {}'.format(i, wnd.title))
+        #        print ('{:2} {}'.format(i, wnd.title))
 
     def switch_to_prev(self):
         logger.info('switch prev')
@@ -176,6 +213,8 @@ class Widget(QDialog):
         self.update()
 
     def pin_to_index(self, idx):
+        if not self.pin_mode:
+            return
         wnds = self.wnds
         if not wnds.has_current:
             logger.warning('try to pin without current')
@@ -207,9 +246,9 @@ class Widget(QDialog):
                 e.g. 'alt' / 'alt shift' / 'ctrl alt'
         """
         modifiers = modifiers.lower().split()
-        alt = 'alt' in modifiers
-        ctrl = 'ctrl' in modifiers
-        shift = 'shift' in modifiers
+        alt = 'alt' in modifiers or 'ralt' in modifiers
+        ctrl = 'ctrl' in modifiers or 'rctrl' in modifiers
+        shift = 'shift' in modifiers or 'rshift' in modifiers
         if not ctrl and not alt and not shift:
             raise TypeError('At least one of Ctrl/Alt/Shift must be present.')
         ctrl = win32con.MOD_CONTROL if ctrl else 0
@@ -218,8 +257,8 @@ class Widget(QDialog):
 
         key = ord(ch)
         hotkey = '-'.join(modifiers)
-        #logger.debug('registering {}-{} (0x{:02x}) for {}'.format(
-        #    hotkey, ch, key, callback.__name__))
+        logger.debug('registering {}-{} (0x{:02x}) for {}'.format(
+            hotkey, ch, key, callback.__name__))
         id = len(self._hotkey_handlers)
         if args is None:
             args = (ch,)
@@ -230,8 +269,11 @@ class Widget(QDialog):
             win32gui.RegisterHotKey(
                 hwnd, id, modifiers, key)
         except pywintypes.error as e:
-            logger.warning(u'register hotkey {} failed, {}'.format(
-                hotkey, e.strerror.decode(config.console_encoding)))
+            logger.warning('registering {}-{} (0x{:02x}) for {} failed'.format(
+                hotkey, ch, key, callback.__name__))
+            raw_input()
+            #logger.warning(u'register hotkey {} failed, {}'.format(
+            #    hotkey, e.strerror.decode(config.console_encoding)))
             return None
         if ephemeral:
             self._hotkey_ids_when_active.append(id)
@@ -240,8 +282,9 @@ class Widget(QDialog):
         self.activate()
 
     def activate(self):
+        self.exit_pin_mode()
         if self.active:
-            logger.debug('panel already activated')
+            #logger.debug('panel already activated')
             return
         logger.info('activating panel')
         self.wnds.update()
@@ -276,9 +319,10 @@ class Widget(QDialog):
     @utils.debug_call
     def deactivate(self):
         if not self.active:
-            logger.debug('panel already deactivated')
+            #logger.debug('panel already deactivated')
             return
         logger.info('deactivating panel')
+        self.pin_mode = False
         self.datetime_timer.stop()
         hwnd = self.winId()
         for id in self._hotkey_ids_when_active:
@@ -363,7 +407,7 @@ class Widget(QDialog):
                 wnd.render(rc_thumb)
                 draw_title(painter, lt, res=self.res)
                 if wnd.active or wnd.previously_active:
-                    draw_border(painter, rc_item, rc_thumb, wnd)
+                    draw_border(painter, rc_item, rc_thumb, wnd, self.pin_mode)
             else:
                 draw_dummy_thumb(painter, lt)
         draw_datetime(painter, self.rect())
@@ -501,10 +545,13 @@ def draw_title(painter, layout, res):
     title = fm.elidedText(wnd.title, Qt.ElideRight, rc.width())
     painter.drawText(rc, Qt.AlignLeft | Qt.AlignVCenter, title)
 
-def draw_border(painter, rc_item, rc_thumb, wnd):
+def draw_border(painter, rc_item, rc_thumb, wnd, pin_mode):
     fm = painter.fontMetrics()
     painter.save()
-    color = QColor(config.BORDER_COLOR)
+    if pin_mode:
+        color = QColor('#2E9AFE')
+    else:
+        color = QColor(config.BORDER_COLOR)
     pen = painter.pen()
     if wnd.active:
         pen.setWidth(3)
