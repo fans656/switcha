@@ -33,6 +33,7 @@ Todos:
 import sys
 import traceback
 import logging
+from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from ctypes import windll
 from collections import OrderedDict, Counter
@@ -50,6 +51,7 @@ import config
 import utils
 
 logger = logging.getLogger(__name__)
+logger.addHandler(RotatingFileHandler('log.log', maxBytes=1024 * 1024, backupCount=1))
 #logger.setLevel(logging.DEBUG)
 #logger.setLevel(logging.INFO)
 #logger.setLevel(logging.WARNING)
@@ -66,8 +68,8 @@ CAPS = chr(win32con.VK_CAPITAL)
 
 # 18 directly switch hotkeys
 # e.g. Alt-U => 1st, Alt-I => 2nd, ..., Alt-1 => 9th, Alt-0 => 18th
-DIRECT_SWITCH_HOTKEYS = 'UIOPMKL' + SEMICOLON + '1234567890'
-DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPMKL;1234567890'
+DIRECT_SWITCH_HOTKEYS = 'UIOPMKL' + SEMICOLON + '7890'
+DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPMKL;7890'
 
 class Res(object):
 
@@ -107,7 +109,7 @@ class Widget(QDialog):
 
         # right alt for seeing time with one hand
         kbd.on('ralt', self.on_activate)
-        kbd.on('ralt^', self.on_deactivate)
+        #kbd.on('ralt^', self.on_deactivate)
 
         on_hotkey(config.quick_mod, 'J', self.alt_tab)
         #on_hotkey(config.quick_mod_reversed, 'J', self.alt_tab)
@@ -123,6 +125,8 @@ class Widget(QDialog):
         # directly switch hotkeys
         for i, ch in enumerate(DIRECT_SWITCH_HOTKEYS):
             on_hotkey(config.quick_mod, ch, self.switch_to_index, args=(i,))
+            if ch.isdigit():
+                continue
             on_hotkey(config.pin_mod, ch, self.pin_to_index, args=(i,))
 
         self.datetime_timer = QTimer()
@@ -394,6 +398,8 @@ class Widget(QDialog):
         color = QColor(config.BACK_COLOR)
         color.setAlpha(int(255 * (max(0.0, min(config.DARKEN_RATIO, 1.0)))))
         painter.fillRect(rc_back, color)
+        for wnd in wnds.wnds:
+            logger.info(wnd.path)
         # draw windows
         for i, lt in enumerate(layouts):
             wnd = lt['wnd']

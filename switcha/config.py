@@ -15,6 +15,11 @@ ALT_TAB_EXCLUDES = set([
     (r'C:\Program Files\WindowsApps\Microsoft.Getstarted_', r'\WhatsNew.Store.exe'),
     (r'C:\Program Files\WindowsApps\Microsoft.Office.OneNote_', r'\onenoteim.exe'),
     (r'C:\Program Files\WindowsApps\Microsoft.WindowsCalculator_', r'\Calculator.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.ZuneVideo', r'\Video.UI.exe'),
+    (r'C:\Program Files\WindowsApps', r'\Music.UI.exe'),
+    (r'C:\Program Files\WindowsApps', ''),
+    (r'C:\Windows\SystemApps\InputApp_cw5n1h2txyewy', r'\WindowsInternal.ComposableShell.Experiences.TextInput.InputApp.exe'),
+    (r'C:\Windows\System32\WWAHost.exe', ''),
 ])
 
 #quick_mod_key = 'alt'
