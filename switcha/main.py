@@ -33,6 +33,7 @@ Todos:
 import sys
 import traceback
 import logging
+import threading
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
 from ctypes import windll
@@ -68,8 +69,8 @@ CAPS = chr(win32con.VK_CAPITAL)
 
 # 18 directly switch hotkeys
 # e.g. Alt-U => 1st, Alt-I => 2nd, ..., Alt-1 => 9th, Alt-0 => 18th
-DIRECT_SWITCH_HOTKEYS = 'UIOPMKL' + SEMICOLON + '7890'
-DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPMKL;7890'
+DIRECT_SWITCH_HOTKEYS = 'UIOPHKL'
+DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPHKL'
 
 class Res(object):
 
@@ -115,11 +116,11 @@ class Widget(QDialog):
         #on_hotkey(config.quick_mod_reversed, 'J', self.alt_tab)
 
         # switch/pin to prev/next
-        on_hotkey(config.quick_mod, COMMA, self.switch_to_prev)
+        #on_hotkey(config.quick_mod, COMMA, self.switch_to_prev)
         #on_hotkey(config.quick_mod_reversed, COMMA, self.switch_to_prev)
         #on_hotkey(config.pin_mod, COMMA, self.pin_to_prev)
 
-        on_hotkey(config.quick_mod, PERIOD, self.switch_to_next)
+        #on_hotkey(config.quick_mod, PERIOD, self.switch_to_next)
         #on_hotkey(config.quick_mod_reversed, PERIOD, self.switch_to_next)
         #on_hotkey(config.pin_mod, PERIOD, self.pin_to_next)
         # directly switch hotkeys
