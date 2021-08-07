@@ -6,8 +6,6 @@ should_hides = [
 ]
 
 ALT_TAB_EXCLUDES = set([
-    #(r'C:\Windows\System32\ApplicationFrameHost.exe', ''),
-    #(r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe', ''),
     #(r'C:\Program Files\WindowsApps\Microsoft.Windows.Photos_', r'\Microsoft.Photos.exe'),
     #(r'C:\Program Files\WindowsApps\Microsoft.WindowsStore_', r'\WinStore.App.exe'),
     #(r'C:\Windows\SystemApps\ShellExperienceHost_', r'\ShellExperienceHost.exe'),
@@ -20,6 +18,11 @@ ALT_TAB_EXCLUDES = set([
     #(r'C:\Program Files\WindowsApps', ''),
     (r'C:\Windows\SystemApps\InputApp_cw5n1h2txyewy', r'\WindowsInternal.ComposableShell.Experiences.TextInput.InputApp.exe'),
     #(r'C:\Windows\System32\WWAHost.exe', ''),
+    (r'C:\Windows\SystemApps', r'InputApp\TextInputHost.exe'),
+    (r'C:\Windows\System32\ApplicationFrameHost.exe', ''),
+    (r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe', ''),
+    (r'C:\Program Files\WindowsApps', 'PeopleApp.exe'),
+    (r'C:\Program Files\WindowsApps\Microsoft.Whiteboard', 'WhiteboardWRT.exe'),
 ])
 
 #quick_mod_key = 'alt'

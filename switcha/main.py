@@ -53,11 +53,6 @@ import utils
 
 logger = logging.getLogger(__name__)
 logger.addHandler(RotatingFileHandler('log.log', maxBytes=1024 * 1024, backupCount=1))
-#logger.setLevel(logging.DEBUG)
-#logger.setLevel(logging.INFO)
-#logger.setLevel(logging.WARNING)
-#logging.getLogger('keyboard').setLevel(logging.INFO)
-#logging.getLogger('window').setLevel(logging.DEBUG)
 
 # https://msdn.microsoft.com/en-us/library/windows/desktop/dd375731(v=vs.85).aspx
 SEMICOLON = chr(0xba)
@@ -69,8 +64,10 @@ CAPS = chr(win32con.VK_CAPITAL)
 
 # 18 directly switch hotkeys
 # e.g. Alt-U => 1st, Alt-I => 2nd, ..., Alt-1 => 9th, Alt-0 => 18th
-DIRECT_SWITCH_HOTKEYS = 'UIOPHKL'
-DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPHKL'
+#DIRECT_SWITCH_HOTKEYS = 'UIOPHKL'
+#DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPHKL'
+DIRECT_SWITCH_HOTKEYS = 'UIOPHKL' + SEMICOLON + '7890'
+DIRECT_SWITCH_HOTKEY_NAMES = 'UIOPHKL;7890'
 
 class Res(object):
 
