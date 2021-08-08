@@ -268,12 +268,11 @@ class Widget(QDialog):
         hwnd = self.winId()
         modifiers = ctrl | alt | shift
         try:
-            win32gui.RegisterHotKey(
-                hwnd, id, modifiers, key)
+            win32gui.RegisterHotKey(hwnd, id, modifiers, key)
         except pywintypes.error as e:
             logger.warning('registering {}-{} (0x{:02x}) for {} failed'.format(
                 hotkey, ch, key, callback.__name__))
-            raw_input()
+            #raw_input()
             #logger.warning(u'register hotkey {} failed, {}'.format(
             #    hotkey, e.strerror.decode(config.console_encoding)))
             return None
