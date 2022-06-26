@@ -19,6 +19,7 @@ ALT_TAB_EXCLUDES = set([
     (r'C:\Windows\SystemApps\InputApp_cw5n1h2txyewy', r'\WindowsInternal.ComposableShell.Experiences.TextInput.InputApp.exe'),
     (r'C:\Windows\System32\WWAHost.exe', ''),
     (r'C:\Windows\SystemApps', r'InputApp\TextInputHost.exe'),
+    (r'', r'TextInputHost.exe'),
     (r'C:\Windows\System32\ApplicationFrameHost.exe', ''),
     (r'C:\Windows\ImmersiveControlPanel\SystemSettings.exe', ''),
     (r'C:\Program Files\WindowsApps', 'PeopleApp.exe'),
