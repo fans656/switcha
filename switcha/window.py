@@ -16,12 +16,9 @@ from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from f6 import each
 
-try:
-    from thumbnail import Thumbnail
-    import config
-    from config import ALT_TAB_EXCLUDES
-except ImportError:
-    pass
+from thumbnail import Thumbnail
+import config
+from config import ALT_TAB_EXCLUDES
 
 __all__ = [
     'enum_windows',

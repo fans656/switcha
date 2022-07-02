@@ -590,6 +590,8 @@ def draw_datetime(painter, rc_canvas):
     d = fm.lineSpacing() * config.DATETIME_VERT_MARGIN_LINESPACING_RATIO
     rc_text.translate(0, -d)
 
+    painter.fillRect(rc_text.adjusted(-10,0,60,10), QColor(0,0,0))
+
     path = QPainterPath()
     path.addText(rc_text.left(), rc_text.bottom(), font, now)
     pen = painter.pen()
