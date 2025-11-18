@@ -1,17 +1,17 @@
 [project]
-name = "switcha2"
-version = "0.1.0"
-description = "Add your description here"
+name = "switcha"
+version = "1.0.0"
+description = "enhanced windows switcher"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "fans==0.0.68",
     "pyside6>=6.10.0",
-    "pytest-mock>=3.15.1",
     "pywin32>=311; sys_platform == 'win32'",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",
+    "pytest-mock>=3.15.1",
 ]
