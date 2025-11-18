@@ -53,7 +53,7 @@ class MainWindow(QWidget):
         self.slots = Slots(self.windows.update)
 
         self.refresh_timer = QTimer()
-        self.refresh_timer.timeout.connect(self.update)
+        self.refresh_timer.timeout.connect(self.refresh)
 
     def show_panel(self):
         self.exit_arrange_mode()
