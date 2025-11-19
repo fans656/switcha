@@ -31,6 +31,13 @@ class Windows(list):
         foreground_hwnd = win32gui.GetForegroundWindow()
         return next((w for w in self if w.hwnd == foreground_hwnd), None)
 
+    @property
+    def last_active_window(self):
+        self.update()
+        hwnd = _get_last_active_hwnd()
+        if hwnd:
+            return next((w for w in self if w.hwnd == hwnd), None)
+
     def update(self):
         self._hwnds = _get_interested_hwnds()
         utils.sync(self, self._hwnds, create=self._create_window, key=lambda w: w.hwnd)
@@ -84,9 +91,17 @@ def _get_interested_hwnds() -> set[int]:
     return {hwnd for hwnd in _get_hwnds() if _is_interested_hwnd(hwnd)}
 
 
-def _get_hwnds() -> set[int]:
-    hwnds = set()
-    win32gui.EnumWindows(lambda hwnd, _: hwnds.add(hwnd), None)
+def _get_last_active_hwnd() -> int:
+    hwnds = [d for d in _get_hwnds() if _is_interested_hwnd(d)]
+    if len(hwnds) < 2:
+        return None
+    else:
+        return hwnds[1]
+
+
+def _get_hwnds() -> list[int]:
+    hwnds = []
+    win32gui.EnumWindows(lambda hwnd, _: hwnds.append(hwnd), None)
     return hwnds
 
 

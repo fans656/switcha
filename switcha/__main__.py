@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 SWITCH_HOTKEYS = [
     'U', 'I', 'O', 'P',
-    'J', 'K', 'L', ';',
+    'H', 'K', 'L', ';',
     '7', '8', '9', '0',
 ]
 
@@ -47,6 +47,7 @@ class MainWindow(QWidget):
         for index, hotkey in enumerate(SWITCH_HOTKEYS):
             hotkey = _to_win_key(hotkey)
             reg(f'ctrl alt {hotkey}', partial(self.activate_window, index))
+        reg(f'ctrl alt j', self.simulate_alt_tab)
 
         self.arrange_mode = False
         self.windows = Windows(surface_hwnd=self.winId())
@@ -88,6 +89,10 @@ class MainWindow(QWidget):
 
     def activate_window(self, index):
         if window := self.slots.get_item(index):
+            window.activate()
+
+    def simulate_alt_tab(self):
+        if window := self.windows.last_active_window:
             window.activate()
 
     def arrange_window(self, index):
